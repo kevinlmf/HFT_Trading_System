@@ -1,0 +1,43 @@
+# HFT Trading System - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core numerical computing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Scientific computing and statistics
+scikit-learn>=1.3.0
+statsmodels>=0.14.0
+
+# Deep learning frameworks
+torch>=2.0.0
+jax>=0.4.0
+jaxlib>=0.4.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# C++ Python bindings
+pybind11>=2.11.0
+
+# Data handling
+h5py>=3.8.0
+tables>=3.8.0
+
+# Optional: GPU support
+# For PyTorch CUDA: torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# For JAX CUDA: jax[cuda11_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# Optional: Development tools
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.4.0
+
+# Optional: Jupyter support
+# jupyter>=1.0.0
+# ipython>=8.12.0
+# ipywidgets>=8.0.0

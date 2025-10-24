@@ -1,0 +1,41 @@
+venv/
+env/
+__pycache__/
+*.pyc
+*.so
+data/*
+!data/README.md
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.DS_Store
+
+# Environment variables and credentials
+.env
+.env.local
+*.key
+*.secret
+credentials.json
+
+# Generated result files (keep committed examples in results/)
+results/benchmarks/*.csv
+results/benchmarks/*.png
+results/strategy_evaluation/*.csv
+results/strategy_evaluation/*.png
+!results/benchmarks/.gitkeep
+!results/strategy_evaluation/.gitkeep
+!results/benchmarks/benchmark_results.csv
+!results/benchmarks/throughput_benchmark.png
+!results/strategy_evaluation/strategy_comparison.png
+!results/strategy_evaluation/evaluation_results.csv
+!results/strategy_evaluation/detailed_performance_report.csv
+
+# ML/DL Models
+models/*.pkl
+models/*.pth
+models/*.xgb
+models/*.lgb
+models/*.h5
+models/*.onnx
+!models/README.md
