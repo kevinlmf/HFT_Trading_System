@@ -82,9 +82,12 @@ pip install -r requirements.txt
 
 ###  Build C++ Core
 ```bash
-./build_cpp.sh  # Linux/macOS
-# or
-python cpp_core/setup.py build_ext --inplace  # Windows
+# Linux / macOS
+cd execution
+./build_cpp.sh
+
+# Windows
+python cpp_core/setup.py build_ext --inplace
 ```
 
 ### 3️ Verify Installation
