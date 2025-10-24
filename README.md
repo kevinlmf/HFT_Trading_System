@@ -165,5 +165,3 @@ Built using:
 <div align="center">
 Worry less — every microsecond counts😊
 </div>
-
-ß
