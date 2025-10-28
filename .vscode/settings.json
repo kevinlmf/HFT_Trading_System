@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": "pybuild/venv/bin/python",
+  "files.associations": {
+    "__node_handle": "cpp",
+    "optional": "cpp",
+    "regex": "cpp",
+    "vector": "cpp"
+  }
+}

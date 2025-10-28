@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/run_paper_trading.py", line 9, in <module>
+    from Execution.trading.trading_engine import RealTimeTradingEngine
+  File "/Users/mengfanlong/Downloads/System/Quant/HFT/HFT_System/Execution/trading/__init__.py", line 23, in <module>
+    from .trading_engine import RealTimeTradingEngine
+  File "/Users/mengfanlong/Downloads/System/Quant/HFT/HFT_System/Execution/trading/trading_engine.py", line 21, in <module>
+    from connectors.base_connector import MarketTick
+ModuleNotFoundError: No module named 'connectors'
