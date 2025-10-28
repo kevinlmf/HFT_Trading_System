@@ -1,3 +1,5 @@
+## HFT_Trading_System
+
 **HFT_Trading_System** is designed to answer two fundamental questions:
 
 1. **How can we make trading faster?**
@@ -32,46 +34,120 @@ export ALPACA_API_SECRET='your_secret'
 pip install numpy pandas torch arch statsmodels scipy matplotlib flask websockets plotly dash
 ```
 
----
+## From Research to Production: End-to-End Trading System Lifecycle
+
+## System Abstraction: Data → Environment → Execution → Monitoring
+
+| **Stage** | **Core Function** | **Actual Components** | **Output** |
+|:-----------|:------------------|:----------------------|:------------|
+| **1. Data Layer** | Real-time market data collection | Alpaca WebSocket Connector, Market Tick & OrderBook Data Structures | Real-time Prices, Bid/Ask Spreads, Volume |
+| **2. Environment Layer** | Simulate and validate trading strategies | Realistic Market Simulator (slippage/latency/partial fills), Backtesting Engine, Market Regime Detector (5 states) | Simulated Trades, Historical Performance, Market Regimes |
+| **3. Execution Layer** | Multi-strategy trading with adaptive routing and risk control | 11 Strategies (Classical/ML/RL/HFT), Adaptive Strategy Router, Portfolio Risk Manager (6 models, 7 constraints), C++ Data Feed | Approved Orders, Position Updates, Risk Metrics |
+| **4. Monitoring Layer** | Performance tracking and analysis | Real-time PnL Tracker, Performance Metrics Calculator (30+ metrics), Throughput Benchmarks | PnL Reports, Risk/Return Metrics, System Logs |
 
 
-
+### Complete System Flow
 
 ```
-
+Market Data (Real-time via Alpaca WebSocket)
+    |
+    v
+[Data Connectors] → Market Ticks & Order Book Snapshots
+    |
+    v
+[Market Regime Detector] → Classify: Trending / Mean-Reverting / Volatile / Quiet / Unknown
+    |
+    v
+[Adaptive Strategy Router] → Score & Select Best Strategy for Current Regime
+    |
+    v
+[Strategy Execution]
+    ├─ Classical (4): Momentum, Mean-Variance, Pairs Trading, Statistical Arbitrage
+    ├─ ML-Based (6): LSTM, Transformer, CNN, Random Forest, XGBoost, LightGBM
+    ├─ RL-Based (6): DQN, A3C, PPO, A2C, SAC, TD3
+    └─ HFT (2): Market Making (inventory skewing), Order Flow Imbalance
+    |
+    v
+[Generate Orders] → Buy/Sell/Hold signals with position sizes
+    |
+    v
+[Portfolio Risk Manager]
+    ├─ Risk Models: Equal-weight, Inverse Vol, Mean-Variance, Risk Parity, Black-Litterman, HRP
+    └─ 7 Constraints: Position Size (20%), Sector (40%), Correlation (60%),
+                      Volatility (15%), Drawdown (5%), VaR (2%), Concentration (50% in top 5)
+    |             |
+    v             v
+APPROVED      REJECTED
+    |             |
+    v             v
+[Market Simulator]  Block & Log
+(Spreads, Slippage,    |
+ Latency, Partial      v
+ Fills, Impact)     Alert User
+    |
+    v
+Execute Trade → Update Position
+    |
+    v
+[Real-time PnL Tracker]
+    ├─ Realized P&L (closed positions)
+    ├─ Unrealized P&L (open positions, mark-to-market)
+    ├─ Equity Curve (with high water mark)
+    └─ Commission Tracking
+    |
+    v
+[Performance Metrics Calculator]
+    ├─ Returns: Total, Annualized, Cumulative
+    ├─ Risk: Volatility, Max Drawdown, VaR (95%), CVaR (95%)
+    ├─ Risk-Adjusted: Sharpe, Sortino, Calmar, Omega
+    ├─ Trading Stats: Win Rate, Profit Factor, Avg Win/Loss, Trade Duration
+    └─ Distribution: Skewness, Kurtosis, Best/Worst Day/Month
+    |
+    v
+[Backtesting & Analysis] → Feedback to Strategy Router (Regime-Performance Mapping)
+```
 ## Directory Structure
-
 ```
 HFT_System/
-├── Data/                              # Layer 1: Market data connectors & datasets
-│   ├── connectors/                    # Exchange APIs (Alpaca, IB)
-│   ├── datasets/                      # Raw market data & preprocessors
-│   └── preprocessors/                 # LSTM, GARCH, feature engineering
-├── Environment/                       # Layer 2: Simulator, Backtester
-│   ├── simulator/                     # Multi-agent market simulation
-│   ├── backtester/                    # Historical backtesting engine
-│   └── pricing/                       # Black-Scholes, Heston, SABR
-├── Execution/                         # Layer 3: Strategy, Risk, C++ Core
-│   ├── strategies/                    # Classical/ML/RL/HFT strategies
-│   │   ├── classical/                 # Momentum, Mean-Variance, Pairs, Stat Arb
-│   │   ├── ml_based/                  # Deep Learning, Reinforcement Learning
-│   │   └── hft_strategies/            # Market Making, Order Flow Imbalance
-│   ├── risk_control/                  # VaR/CVaR/Greeks risk controller
-│   ├── trading/                       # Real-time trading engine
-│   └── cpp_core/                      # C++ low-latency core (<1µs)
-├── Monitoring/                        # Layer 4: Dashboard, Tracking
-│   ├── evaluation/                    # Sharpe, Sortino, Max Drawdown
-│   ├── benchmarks/                    # Throughput & latency benchmarks
-│   ├── pnl_tracking/                  # Real-time PnL tracker
-│   └── dashboard/                     # WebSocket dashboard
-├── cuda_accelerated/                  # GPU acceleration (50-250x speedup)
-│   ├── cpp/                           # CUDA C++ kernels
-│   └── python/                        # Python bindings
-├── examples/                          # Complete workflow examples
-├── build_system.sh                    # Master build script
-└── run_trading.sh                     # Trading system launcher
+├── Data/                  # Real-time data layer
+│   ├── connectors/        # Alpaca WebSocket connector
+│   ├── datasets/          #  ⚠️Historical loaders
+│   └── preprocessors/     #  ⚠️ Feature engineering
+│
+├── Environment/           # Simulation & validation
+│   ├── simulator/         # Market simulator (spread, slippage, latency)
+│   ├── backtester/        # Historical backtesting with metrics
+│   └── pricing/           # ⚠️ Option pricing models
+│
+├── Execution/             # Strategy execution & risk control
+│   ├── strategies/        # 18 total strategies
+│   │   ├── classical/     # Momentum, Mean-Variance, StatArb
+│   │   ├── ml_based/      # LSTM, Transformer, XGBoost (+ RL)
+│   │   └── hft_strategies/# Market Making, Order Flow Imbalance
+│   ├── risk_control/      # Portfolio manager, CVaR models
+│   ├── trading/           # Engine + Adaptive Strategy Router
+│   └── cpp_core/          # C++ data feed (PyBind11 bindings)
+│
+├── Monitoring/            # Performance tracking
+│   ├── evaluation/        # 30+ metrics (returns, risk, distribution)
+│   ├── benchmarks/        # Throughput & latency tests
+│   ├── pnl_tracking/      # Real-time P&L tracker
+│   └── dashboard/         # ⚠️ WebSocket dashboard
+│
+├── cuda_accelerated/      # GPU acceleration
+│   ├── kernels/           # CUDA kernels (backtest, risk calc)
+│   └── python/            # Python bindings for CUDA modules
+│
+├── examples/              # Example workflows
+├── scripts/               # Evaluation & comparison scripts
+├── build_system.sh        # Build script (C++ + CUDA)
+└── run_trading.sh         # System launcher (demo/backtest/live)
+
+**Legend**: ⚠️ Directory exists but empty (reserved for future development)
 ```
 ---
+
+
 
 ## Configuration
 
@@ -97,30 +173,6 @@ rl_strategy = rl_strategies.PPOStrategy(
 ```
 
 ---
-
-## Trading System Usage
-
-```bash
-# Demo mode (market data only, no trading)
-./run_trading.sh demo
-
-# Paper trading (simulated, no real money)
-./run_trading.sh paper --symbols AAPL,TSLA --strategies momentum,market_making --dashboard
-
-# Backtest (historical simulation with all strategies)
-./run_trading.sh backtest --strategies all --capital 200000 --dashboard
-
-# Live trading (CAUTION: real money)
-./run_trading.sh live --capital 10000 --strategies momentum --interval 10
-
-# Monitoring only (dashboard without trading)
-./run_trading.sh monitor-only --dashboard
-```
-
-**Available Strategies**: `momentum`, `mean_reversion`, `pairs_trading`, `market_making`, `statistical_arbitrage`, `all`
-
-**Logs**: All sessions logged to `logs/` directory
-
 ## Performance Metrics
 
 ### Latency (C++ Core) - **Answering: How fast can we trade?**
@@ -138,31 +190,6 @@ rl_strategy = rl_strategies.PPOStrategy(
 | Greeks Calculation (1000 options) | 3 ms vs 500 ms CPU | 167x |
 
 ---
-
-## Integration Workflow
-
-```
-Night (Research - CUDA):
-1. Backtest 1000+ strategies         → ./run_trading.sh backtest --strategies all
-2. Calculate risk metrics (VaR/CVaR)
-3. Optimize hyperparameters
-   → Discover best strategies
-
-Day (Execution - C++):
-1. Paper/demo trading                → ./run_trading.sh paper --dashboard
-2. Execute trades (<1µs latency)
-3. Real-time risk checks (<5µs)
-   → Live trading with risk controls
-
-Always (Monitoring):
-- Dashboard                          → ./run_trading.sh monitor-only --dashboard
-- Real-time PnL tracking
-- Performance analytics
-   → Continuous feedback loop
-```
-
----
-
 
 ## Future Research Directions
 
@@ -190,4 +217,4 @@ Built using: [Pybind11](https://github.com/pybind/pybind11), [PyTorch](https://p
 
 ---
 
-When curiosity meets motion, every millisecond holds the spark of alpha 🌅
+When curiosity meets motion, every millisecond holds the spark.🌅
