@@ -6,7 +6,7 @@
    → Hardware-efficient C++ execution (<1µs latency), lock-free data pipelines, and optimized memory design.
 
 2. **What are the best strategies to trade?**
-   → Data-driven discovery using reinforcement learning, deep learning, and statistical inference.
+   → Data-driven discovery using machine learning, statistical methods, and financial mathematics.
 
 ### Setup Environment
 ```bash
