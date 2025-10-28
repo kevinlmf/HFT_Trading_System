@@ -8,6 +8,12 @@
 2. **What are the best strategies to trade?**
    → Data-driven discovery using reinforcement learning, deep learning, and statistical inference.
 
+### Setup Environment
+```bash
+git clone https://github.com/kevinlmf/HFT_Trading_System
+cd HFT_Trading_System
+```
+
 ## Quick Start
 
 ```bash
@@ -194,10 +200,10 @@ rl_strategy = rl_strategies.PPOStrategy(
 ## Future Research Directions
 
 1. **Statistical Computing Optimization**
-   Designing algorithms with **lower space and time complexity**: numerical linear algebra optimizations, memory-efficient data structures, distributed computing frameworks for ultra-high-frequency settings.
+Designing algorithms with **lower space and time complexity**: numerical linear algebra optimizations, memory-efficient data structures, distributed computing frameworks for ultra-high-frequency settings.
 
 2. **Microstructure-Aware Strategy Adaptation**
-   Developing **adaptive HFT strategies** responsive to evolving market microstructures: order flow imbalance, spread dynamics, latency arbitrage—using online learning and reinforcement frameworks optimized for ultra-low latency execution.
+Developing **adaptive HFT strategies** responsive to evolving **market microstructures**: order flow imbalance, spread dynamics, latency arbitrage.
 
 ---
 
