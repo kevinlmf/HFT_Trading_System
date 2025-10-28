@@ -1,5 +1,3 @@
-# High-Frequency Trading System with Hardware Acceleration
-
 **HFT_Trading_System** is designed to answer two fundamental questions:
 
 1. **How can we make trading faster?**
@@ -36,57 +34,9 @@ pip install numpy pandas torch arch statsmodels scipy matplotlib flask websocket
 
 ---
 
-## From Research to Production: End-to-End Trading System Lifecycle
-
-## System Abstraction: Data → Environment → Execution → Monitoring
-
-| **Stage** | **Core Function** | **Typical Components** | **Output** |
-|:-----------|:------------------|:------------------------|:------------|
-| **1. Data Layer** | Collect and model market signals | Market Data Connectors, LSTM, GARCH, Volatility Surface | Forecasted Prices, Volatility, Features |
-| **2. Environment Layer** | Simulate and validate trading strategies | Multi-Agent Market Simulator, Backtesting Engine, Pricing Models (BS/Heston/SABR) | Simulated Markets, Historical Performance |
-| **3. Execution Layer** | Strategy generation and risk control | HFT Strategies (Market Making, Stat Arb), C++ Core (<1µs), Risk Controller (VaR, CVaR, Greeks) | Approved Orders, Portfolio Updates |
-| **4. Monitoring Layer** | Real-time feedback and system optimization | Performance Metrics, PnL Tracker, WebSocket Dashboard, Throughput Benchmarks | Live Risk/Return Visualization, System Logs |
 
 
-### Complete System Flow
 
-```
-Market Data (OHLCV, Order Book, Trade Flow)
-    |
-    v
-LSTM+GARCH Forecasting (price/vol prediction)
-    |
-    v
-Multi-Agent Market Simulation (Market makers, arbitrageurs, noise traders)
-    |
-    v
-Strategy Selection (Classical: Momentum, Mean-Variance, Pairs Trading, Stat Arb)
-    |               (ML-based: Deep Learning, Reinforcement Learning)
-    |               (HFT: Market Making, Order Flow Imbalance)
-    v
-Generate Orders (from optimal strategy)
-    |
-    v
-Risk Controller (VaR, CVaR, Delta, Gamma, Vega, Theta, Position Limits)
-    |             |
-    v             v
-APPROVED      REJECTED
-    |             |
-    v             v
-C++ Core       Block Order
-(<1µs latency)    |
-    |             v
-    v          Log & Alert
-Execute Trade
-    |
-    v
-Update Portfolio & Risk Metrics
-    |
-    v
-Real-time Monitoring (Dashboard/WebSocket)
-    |
-    v
-Performance Analysis → Feedback to Strategy Selection
 ```
 
 ## Directory Structure
