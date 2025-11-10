@@ -99,7 +99,19 @@ class SimpleBacktester:
             # Generate signal
             try:
                 signal = strategy_func(current_data)
+                # 如果返回Series，取最后一个值
+                if isinstance(signal, pd.Series):
+                    if len(signal) > 0:
+                        signal = signal.iloc[-1]
+                    else:
+                        signal = 0
+                # 确保是数值类型
+                if pd.isna(signal):
+                    signal = 0
+                signal = float(signal) if signal is not None else 0
             except Exception as e:
+                import warnings
+                warnings.warn(f"Strategy signal generation failed at step {i}: {e}")
                 signal = 0
 
             # Execute trades based on signal

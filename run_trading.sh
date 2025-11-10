@@ -23,11 +23,14 @@ ENABLE_DASHBOARD=false
 ENABLE_LOGGING=true
 CONFIG_FILE=""
 DRY_RUN=false
+RISK_MODEL="risk_parity"
+MONTE_CARLO_PATHS=100000
+SLIPPAGE_IMPL=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        paper|backtest|live|monitor-only|demo)
+        paper|backtest|live|monitor-only|demo|complete-flow|benchmark-slippage)
             MODE=$1
             shift
             ;;
@@ -63,6 +66,18 @@ while [[ $# -gt 0 ]]; do
             ENABLE_LOGGING=false
             shift
             ;;
+        --risk-model)
+            RISK_MODEL="$2"
+            shift 2
+            ;;
+        --monte-carlo-paths)
+            MONTE_CARLO_PATHS="$2"
+            shift 2
+            ;;
+        --slippage-impl)
+            SLIPPAGE_IMPL="$2"
+            shift 2
+            ;;
         --help|-h)
             cat << EOF
 End-to-End Trading System - Execution Script
@@ -70,26 +85,39 @@ End-to-End Trading System - Execution Script
 Usage: $0 [mode] [options]
 
 MODES:
-  paper          Run paper trading (default, no real money)
-  backtest       Run historical backtest
-  live           Run live trading (CAUTION: real money!)
-  monitor-only   Only start monitoring dashboard
-  demo           Run simple demo (market data only)
+  paper              Run paper trading (default, no real money)
+  backtest           Run historical backtest
+  live               Run live trading (CAUTION: real money!)
+  monitor-only       Only start monitoring dashboard
+  demo               Run simple demo (market data only)
+  complete-flow      Run complete trading flow (EDA + Strategy + Risk + Position)
+  benchmark-slippage Run slippage performance benchmark
 
 OPTIONS:
   --symbols      Comma-separated list of symbols (default: AAPL,MSFT,GOOGL)
   --capital      Initial capital (default: 100000)
-  --strategies   Comma-separated strategies (default: momentum,mean_reversion)
-                 Available: momentum, mean_reversion, pairs_trading,
-                           market_making, statistical_arbitrage
+  --strategies   Comma-separated strategies (default: all)
+                 Use 'all' to test all available strategies (Classical, ML, RL, HFT)
+                 Or specify: momentum, mean_reversion, rsi, macd, ml_random_forest, etc.
   --interval     Update interval in seconds (default: 5)
   --dashboard    Enable real-time web dashboard
   --config       Path to config file (overrides other options)
+  --risk-model   Risk model for position management (default: risk_parity)
+                 Options: equal_weight, inverse_volatility, mean_variance,
+                         risk_parity, black_litterman, hrp
+  --monte-carlo-paths  Number of Monte Carlo paths (default: 100000)
+  --slippage-impl Force smart executor implementation (python_vectorized, cpp, cuda)
   --dry-run      Show what would run without executing
   --no-log       Disable file logging
   --help         Show this help
 
 EXAMPLES:
+  # Complete trading flow (recommended - includes all features)
+  $0 complete-flow --symbols AAPL,MSFT,GOOGL --capital 1000000
+
+  # Complete flow with custom risk model
+  $0 complete-flow --symbols AAPL,MSFT --risk-model mean_variance --monte-carlo-paths 200000
+
   # Paper trading with default settings
   $0 paper
 
@@ -98,6 +126,9 @@ EXAMPLES:
 
   # Backtest with dashboard
   $0 backtest --dashboard
+
+  # Slippage performance benchmark
+  $0 benchmark-slippage
 
   # Live trading (requires API keys)
   $0 live --capital 50000 --strategies momentum
@@ -227,6 +258,13 @@ echo "  Strategies: $STRATEGIES"
 echo "  Interval:   ${UPDATE_INTERVAL}s"
 echo "  Dashboard:  $ENABLE_DASHBOARD"
 echo "  Logging:    $ENABLE_LOGGING"
+if [ "$MODE" = "complete-flow" ]; then
+    echo "  Risk Model: $RISK_MODEL"
+    echo "  MC Paths:   $MONTE_CARLO_PATHS"
+    if [ -n "$SLIPPAGE_IMPL" ]; then
+        echo "  Slippage Impl: $SLIPPAGE_IMPL"
+    fi
+fi
 if [ ! -z "$CONFIG_FILE" ]; then
     echo "  Config:     $CONFIG_FILE"
 fi
@@ -252,6 +290,12 @@ if [ "$DRY_RUN" = true ]; then
             ;;
         monitor-only)
             echo "  python3 Monitoring/dashboard/dashboard_server.py"
+            ;;
+        complete-flow)
+            echo "  python3 -c 'from Execution.engine.integrated_trading_flow import IntegratedTradingFlow; ...'"
+            ;;
+        benchmark-slippage)
+            echo "  python3 Monitoring/benchmarks/benchmark_slippage.py"
             ;;
     esac
     exit 0
@@ -549,6 +593,137 @@ if __name__ == '__main__':
 PYTHON_SCRIPT
 
             python3 /tmp/simple_monitor.py
+        fi
+        ;;
+
+    complete-flow)
+        echo -e "${GREEN}============================================================${NC}"
+        echo -e "${GREEN}Starting COMPLETE TRADING FLOW${NC}"
+        echo -e "${GREEN}(EDA + Strategy Comparison + Risk + Position Management)${NC}"
+        echo -e "${GREEN}============================================================${NC}"
+        echo ""
+
+        echo -e "${BLUE}Running complete trading flow...${NC}"
+        echo ""
+
+        if [ "$ENABLE_LOGGING" = true ]; then
+            LOGFILE="$LOGS_DIR/complete_flow_$(date +%Y%m%d_%H%M%S).log"
+            python3 -c "
+import sys
+sys.path.insert(0, '.')
+from Execution.engine.integrated_trading_flow import IntegratedTradingFlow
+from Execution.risk_control.portfolio_manager import RiskModel
+from Execution.engine.complete_trading_flow import create_sample_strategies
+from Execution.engine.pipeline import create_sample_data
+force_slippage_impl = '${SLIPPAGE_IMPL}'
+force_slippage_impl = force_slippage_impl if force_slippage_impl else None
+import pandas as pd
+
+# Parse risk model
+risk_model_map = {
+    'equal_weight': RiskModel.EQUAL_WEIGHT,
+    'inverse_volatility': RiskModel.INVERSE_VOLATILITY,
+    'mean_variance': RiskModel.MEAN_VARIANCE,
+    'risk_parity': RiskModel.RISK_PARITY,
+    'black_litterman': RiskModel.BLACK_LITTERMAN,
+    'hrp': RiskModel.HIERARCHICAL_RISK_PARITY
+}
+risk_model = risk_model_map.get('$RISK_MODEL', RiskModel.RISK_PARITY)
+
+# Create flow
+flow = IntegratedTradingFlow(
+    initial_capital=$CAPITAL,
+    risk_model=risk_model,
+    monte_carlo_paths=$MONTE_CARLO_PATHS
+)
+
+# Create sample data
+data = create_sample_data(n_records=1000)
+data['close'] = data['price']
+
+# 使用所有策略进行对比（默认行为）
+strategies = None
+print('Using all available strategies for comprehensive comparison...')
+
+# Get symbols
+symbols = '$SYMBOLS'.split(',')
+
+# Run complete flow
+result = flow.execute_complete_flow_with_position_management(
+    data=data,
+    strategies=strategies,
+    symbols=symbols[:3] if len(symbols) > 3 else symbols,
+    force_slippage_impl=force_slippage_impl
+)
+
+print('\\nComplete flow finished successfully!')
+print('\\nAll reports saved to results/ directory')
+" 2>&1 | tee "$LOGFILE"
+        else
+            python3 -c "
+import sys
+sys.path.insert(0, '.')
+from Execution.engine.integrated_trading_flow import IntegratedTradingFlow
+from Execution.risk_control.portfolio_manager import RiskModel
+from Execution.engine.complete_trading_flow import create_sample_strategies
+from Execution.engine.pipeline import create_sample_data
+force_slippage_impl = '${SLIPPAGE_IMPL}'
+force_slippage_impl = force_slippage_impl if force_slippage_impl else None
+
+risk_model_map = {
+    'equal_weight': RiskModel.EQUAL_WEIGHT,
+    'inverse_volatility': RiskModel.INVERSE_VOLATILITY,
+    'mean_variance': RiskModel.MEAN_VARIANCE,
+    'risk_parity': RiskModel.RISK_PARITY,
+    'black_litterman': RiskModel.BLACK_LITTERMAN,
+    'hrp': RiskModel.HIERARCHICAL_RISK_PARITY
+}
+risk_model = risk_model_map.get('$RISK_MODEL', RiskModel.RISK_PARITY)
+
+flow = IntegratedTradingFlow(
+    initial_capital=$CAPITAL,
+    risk_model=risk_model,
+    monte_carlo_paths=$MONTE_CARLO_PATHS
+)
+
+data = create_sample_data(n_records=1000)
+data['close'] = data['price']
+
+# 使用所有策略进行对比（默认行为）
+strategies = None
+print('Using all available strategies for comprehensive comparison...')
+
+symbols = '$SYMBOLS'.split(',')
+
+result = flow.execute_complete_flow_with_position_management(
+    data=data,
+    strategies=strategies,
+    symbols=symbols[:3] if len(symbols) > 3 else symbols,
+    force_slippage_impl=force_slippage_impl
+)
+
+print('\\nComplete flow finished successfully!')
+print('\\nAll reports saved to results/ directory')
+"
+        fi
+        ;;
+
+    benchmark-slippage)
+        echo -e "${GREEN}============================================================${NC}"
+        echo -e "${GREEN}Running SLIPPAGE PERFORMANCE BENCHMARK${NC}"
+        echo -e "${GREEN}============================================================${NC}"
+        echo ""
+
+        if [ -f "Monitoring/benchmarks/benchmark_slippage.py" ]; then
+            if [ "$ENABLE_LOGGING" = true ]; then
+                LOGFILE="$LOGS_DIR/slippage_benchmark_$(date +%Y%m%d_%H%M%S).log"
+                python3 Monitoring/benchmarks/benchmark_slippage.py 2>&1 | tee "$LOGFILE"
+            else
+                python3 Monitoring/benchmarks/benchmark_slippage.py
+            fi
+        else
+            echo -e "${RED}Error: benchmark_slippage.py not found${NC}"
+            exit 1
         fi
         ;;
 

@@ -1,243 +1,125 @@
-# High-Frequency Trading System with Hardware Acceleration
+# High-Frequency Trading System (HFT)
 
-**HFT_Trading_System** is designed to answer two fundamental questions:
+A unified research-to-execution stack for quantitative trading. The system fuses EDA, intelligent execution (Python/C++/CUDA), multi-strategy evaluation, risk control, position management, and deep optimization into a single automated flow.
 
-1. **How can we make trading faster?**
-   → Hardware-efficient C++ execution (<1µs latency), lock-free data pipelines, and optimized memory design.
+---
+## Integrated Flow Feedback Loop
+1. **Latency Core (engineering)** – `pipeline` + `smart_executor` auto-route workloads across Python vectorized, C++, or CUDA paths; benchmarks live under `benchmark_slippage.py`.
+2. **Strategy Evaluation Loop** – `strategy_factory` builds candidates; `strategy_benchmark` + `strategy_analyzer` run backtest, Monte Carlo, and regime-aware scoring, then export results via `result_generator`.
+3. **Optimization Stack (5 layers)** – `optimization_stack.py` applies objectives (Sharpe/Variance/CVaR), defines risk models, auto-selects algorithms, optimizes data layout, and executes with JIT/GPU to produce signals & portfolio weights.
 
-2. **What are the best strategies to trade?**
-   → Data-driven discovery using reinforcement learning, deep learning, and statistical inference.
+Running `./run_trading.sh complete-flow` ties the loop together: data is processed with the latency core, strategies are stress-tested, and the optimization stack finalizes risk metrics, allocations, and reports. Generated artifacts in `results/strategies/` feed back into research and configuration, enabling continuous improvement.
+
+## Why Speed Matters
+
+**Latency Core (sub-millisecond execution)**
+- Python vectorized path for fast prototyping.
+- Pybind11 C++ engine (<1 µs per order, 100M+ orders/sec throughput).
+- CUDA kernels for slippage, Monte Carlo, and backtest acceleration (up to 200M orders/sec).
+- Smart executor auto-routes workloads by data size, aligning with cache/JIT/GPU availability.
+
+## **Trading Intelligence (full-stack decision support)**
+
+- Strategy coverage: classical, statistical, ML, RL, and HFT microstructure playbooks.
+- Backtesting + Monte Carlo fusion with regime-aware scoring.
+- VaR/CVaR, drawdown, volatility, and Sharpe/Sortino metrics with optimized portfolio allocation.
+- Automated reporting (JSON/CSV/HTML/PNG) plus textual desk recommendations.
+
+---
+## Usage of Statistics Computing
+# Optimization Stack (5 Layers)
+1. **Statistical Theory** – objectives (Sharpe, variance, CVaR, target-return).
+2. **Model Expression** – likelihood/risk functions with gradients/constraints.
+3. **Algorithm Design** – automatic choice among GD, Adam, L-BFGS, Newton, annealing.
+4. **Data Structure** – SIMD-friendly layouts, parallel chunking, GPU memory plans.
+5. **System Implementation** – Numba JIT, CuPy/CUDA kernels, multi-thread execution.
+
+---
 
 ## Quick Start
-
 ```bash
-# 1. Build entire system (CPU + optional CUDA)
-./build_system.sh --all --test
+# 0. Clone and enter the project
+git clone https://github.com/kevinlmf/HFT_Trading_System.git hft_system
+ cd hft_system/HFT_System
 
-# 2. Set API keys (for paper/live trading)
-export ALPACA_API_KEY='your_key'
-export ALPACA_API_SECRET='your_secret'
+# 1. Make helper scripts executable (first time only)
+HFT_System$ chmod +x build_system.sh run_trading.sh
 
-# 3. Run trading system
-./run_trading.sh demo                    # Demo mode (market data only)
-./run_trading.sh paper --dashboard       # Paper trading (no real money)
-./run_trading.sh backtest --dashboard    # Backtest with monitoring
+# 2. (Optional) Build C++/CUDA components and verify dependencies
+HFT_System$ ./build_system.sh --all --test
 
-# Advanced usage
-./run_trading.sh paper --symbols AAPL,TSLA --strategies momentum,market_making
-./run_trading.sh backtest --capital 50000 --strategies all
-./run_trading.sh monitor-only --dashboard  # Monitoring only
+# 3. Run the complete trading flow (EDA → strategy evaluation → risk/positions → reports)
+HFT_System$ ./run_trading.sh complete-flow --symbols AAPL,MSFT,GOOGL
+
+# 4. Other entrypoints
+HFT_System$ ./run_trading.sh paper --dashboard        # Paper trading + dashboard
+HFT_System$ ./run_trading.sh backtest --dashboard     # Backtest + dashboard
+HFT_System$ ./run_trading.sh benchmark-slippage       # Python/C++/CUDA latency benchmark
 ```
+> Tip: When copying commands into the terminal, drop the trailing comments that start with `#`.
+Requirements: Python 3.8+, GCC 7+, optional CUDA 11+. Install dependencies with `pip install -r requirements.txt` (see repository for curated list).
 
-**Installation**: Python 3.8+, GCC 7.0+ (C++17), CUDA 11+ (optional)
+---
+
+## Latency Benchmarks
+Monitoring/benchmarks/benchmark_slippage.py` runs these comparisons end-to-end and exports charts under `results/latency/`.
+
+### Statistics Computing Benchmark
+Compare full pipeline runtime with the optimization stack enabled vs disabled:
 ```bash
-pip install numpy pandas torch arch statsmodels scipy matplotlib flask websockets plotly dash
+python3 Monitoring/benchmarks/benchmark_statistics_computing.py
 ```
+Results land in `results/strategies/statistics_benchmark/` as timestamped JSON/TXT summaries (runtime, top strategies, speedup).
+
+**Latest snapshot (2025‑11‑09 14:21:05)**  
+- Records: 50,000 (`--records 50000`) with 200,000 Monte Carlo paths (`--monte-carlo-paths 200000`)  
+- Baseline runtime: 452.53 s | Optimized runtime: 447.53 s → **1.01× speedup** on CPU-optimized risk metrics  
+- Risk checks: `hft_market_making` passed; other strategies flagged for negative Sharpe during stress run  
+- Best overall (baseline): `hft_market_making`; best overall (optimized): `momentum`  
+- Outputs: `statistics_computing_comparison_20251109_142105.json` and `.txt`, plus per-strategy breakdowns
 
 ---
 
-## From Research to Production: End-to-End Trading System Lifecycle
+## Primary CLI Entrypoints
+- `./run_trading.sh complete-flow` – full pipeline + reports (default strategies or user selection).
+- `./run_trading.sh paper` – paper trading engine with monitoring dashboard.
+- `./run_trading.sh backtest` – historical evaluation with visual dashboards.
+- `./run_trading.sh benchmark-slippage` – compare Python vs C++ vs CUDA slippage implementations.
 
-## System Abstraction: Data → Environment → Execution → Monitoring
-
-| **Stage** | **Core Function** | **Typical Components** | **Output** |
-|:-----------|:------------------|:------------------------|:------------|
-| **1. Data Layer** | Collect and model market signals | Market Data Connectors, LSTM, GARCH, Volatility Surface | Forecasted Prices, Volatility, Features |
-| **2. Environment Layer** | Simulate and validate trading strategies | Multi-Agent Market Simulator, Backtesting Engine, Pricing Models (BS/Heston/SABR) | Simulated Markets, Historical Performance |
-| **3. Execution Layer** | Strategy generation and risk control | HFT Strategies (Market Making, Stat Arb), C++ Core (<1µs), Risk Controller (VaR, CVaR, Greeks) | Approved Orders, Portfolio Updates |
-| **4. Monitoring Layer** | Real-time feedback and system optimization | Performance Metrics, PnL Tracker, WebSocket Dashboard, Throughput Benchmarks | Live Risk/Return Visualization, System Logs |
-
-
-### Complete System Flow
-
-```
-Market Data (OHLCV, Order Book, Trade Flow)
-    |
-    v
-LSTM+GARCH Forecasting (price/vol prediction)
-    |
-    v
-Multi-Agent Market Simulation (Market makers, arbitrageurs, noise traders)
-    |
-    v
-Strategy Selection (Classical: Momentum, Mean-Variance, Pairs Trading, Stat Arb)
-    |               (ML-based: Deep Learning, Reinforcement Learning)
-    |               (HFT: Market Making, Order Flow Imbalance)
-    v
-Generate Orders (from optimal strategy)
-    |
-    v
-Risk Controller (VaR, CVaR, Delta, Gamma, Vega, Theta, Position Limits)
-    |             |
-    v             v
-APPROVED      REJECTED
-    |             |
-    v             v
-C++ Core       Block Order
-(<1µs latency)    |
-    |             v
-    v          Log & Alert
-Execute Trade
-    |
-    v
-Update Portfolio & Risk Metrics
-    |
-    v
-Real-time Monitoring (Dashboard/WebSocket)
-    |
-    v
-Performance Analysis → Feedback to Strategy Selection
-```
-
-## Directory Structure
-
-```
-HFT_System/
-├── Data/                              # Layer 1: Market data connectors & datasets
-│   ├── connectors/                    # Exchange APIs (Alpaca, IB)
-│   ├── datasets/                      # Raw market data & preprocessors
-│   └── preprocessors/                 # LSTM, GARCH, feature engineering
-├── Environment/                       # Layer 2: Simulator, Backtester
-│   ├── simulator/                     # Multi-agent market simulation
-│   ├── backtester/                    # Historical backtesting engine
-│   └── pricing/                       # Black-Scholes, Heston, SABR
-├── Execution/                         # Layer 3: Strategy, Risk, C++ Core
-│   ├── strategies/                    # Classical/ML/RL/HFT strategies
-│   │   ├── classical/                 # Momentum, Mean-Variance, Pairs, Stat Arb
-│   │   ├── ml_based/                  # Deep Learning, Reinforcement Learning
-│   │   └── hft_strategies/            # Market Making, Order Flow Imbalance
-│   ├── risk_control/                  # VaR/CVaR/Greeks risk controller
-│   ├── trading/                       # Real-time trading engine
-│   └── cpp_core/                      # C++ low-latency core (<1µs)
-├── Monitoring/                        # Layer 4: Dashboard, Tracking
-│   ├── evaluation/                    # Sharpe, Sortino, Max Drawdown
-│   ├── benchmarks/                    # Throughput & latency benchmarks
-│   ├── pnl_tracking/                  # Real-time PnL tracker
-│   └── dashboard/                     # WebSocket dashboard
-├── cuda_accelerated/                  # GPU acceleration (50-250x speedup)
-│   ├── cpp/                           # CUDA C++ kernels
-│   └── python/                        # Python bindings
-├── examples/                          # Complete workflow examples
-├── build_system.sh                    # Master build script
-└── run_trading.sh                     # Trading system launcher
-```
----
-
-## Configuration
-
-### Adjusting Strategy Parameters
-```python
-# HFT Market Making Strategy
-from Execution.strategies.hft_strategies import market_making
-strategy = market_making.MarketMakingStrategy(
-    spread=0.01,              # Bid-ask spread (1 bp)
-    inventory_limit=1000,     # Max position size
-    order_size=100,           # Default order size
-    risk_aversion=0.5         # Risk aversion parameter
-)
-
-# Machine Learning Strategy
-from Execution.strategies.ml_based import rl_strategies
-rl_strategy = rl_strategies.PPOStrategy(
-    learning_rate=3e-4,       # Learning rate
-    gamma=0.99,               # Discount factor
-    clip_epsilon=0.2,         # PPO clip parameter
-    update_epochs=10          # Training epochs per update
-)
-```
+All modes accept flags: `--symbols`, `--capital`, `--risk-model`, `--strategies`, `--monte-carlo-paths`, etc. Use `./run_trading.sh --help` for full list.
 
 ---
 
-## Trading System Usage
+## Outputs
+Organised under `results/` (auto-ignored by git):
+- `strategies/` – contains `trading_analysis_<ts>.*` bundles (JSON, CSV, HTML, PNG, TXT) from complete-flow runs.
+- `latency/` – contains `slippage_benchmark_<ts>.*` outputs comparing Python vs C++ vs CUDA.
 
-```bash
-# Demo mode (market data only, no trading)
-./run_trading.sh demo
-
-# Paper trading (simulated, no real money)
-./run_trading.sh paper --symbols AAPL,TSLA --strategies momentum,market_making --dashboard
-
-# Backtest (historical simulation with all strategies)
-./run_trading.sh backtest --strategies all --capital 200000 --dashboard
-
-# Live trading (CAUTION: real money)
-./run_trading.sh live --capital 10000 --strategies momentum --interval 10
-
-# Monitoring only (dashboard without trading)
-./run_trading.sh monitor-only --dashboard
-```
-
-**Available Strategies**: `momentum`, `mean_reversion`, `pairs_trading`, `market_making`, `statistical_arbitrage`, `all`
-
-**Logs**: All sessions logged to `logs/` directory
-
-## Performance Metrics
-
-### Latency (C++ Core) - **Answering: How fast can we trade?**
-| Operation | Latency | Technique |
-|:----------|:--------|:----------|
-| Order Processing | <1 µs | Lock-free queues, zero-copy memory |
-| Risk Checks | <5 µs | Pre-computed Greeks, SIMD operations |
-| Order Book Updates | <10 µs | Custom allocators, cache-aligned data |
-
-### Throughput (CUDA) - **Enabling overnight strategy discovery**
-| Task | Performance | Speedup |
-|:-----|:------------|:--------|
-| Backtest (1000 strategies) | 30 sec vs 25 min CPU | 50x |
-| Monte Carlo VaR (1M paths) | 2 ms vs 1.2 sec CPU | 250x |
-| Greeks Calculation (1000 options) | 3 ms vs 500 ms CPU | 167x |
+### Latest Complete-Flow Snapshot (2025‑11‑09 12:58)
+- Mode: `./run_trading.sh complete-flow --symbols AAPL,MSFT,GOOGL`
+- Risk checks passed: `mean_reversion`, `statistical_mean_reversion`
+- Recommended strategy: `mean_reversion` (Sharpe 7.088, total return 5.19e11 %)
+- Portfolio allocation: `AAPL` 33.33 %, `MSFT` 33.33 %, `GOOGL` 33.33 %
+- Reports saved under `results/trading_analysis_20251109_125803.*`
 
 ---
 
-## Integration Workflow
+## Key Modules & Scripts
+- `Execution/engine/pipeline.py` – orchestrates EDA and smart execution.
+- `Execution/engine/integrated_trading_flow.py` – main public interface (invoked by CLI).
+- `Execution/engine/strategy_factory.py` – builds classical, ML, RL, HFT strategies.
+- `Execution/engine/strategy_analyzer.py` – regime-aware performance diagnostics.
+- `Execution/strategy_comparison/strategy_benchmark.py` – backtest + Monte Carlo fusion.
+- `Execution/risk_control/portfolio_manager.py` – constraint-aware portfolio optimization.
+- `Monitoring/benchmarks/benchmark_slippage.py` – timing harness for Python/C++/CUDA.
+- `examples/complete_flow_demo.py` – callable demo of the integrated pipeline.
 
-```
-Night (Research - CUDA):
-1. Backtest 1000+ strategies         → ./run_trading.sh backtest --strategies all
-2. Calculate risk metrics (VaR/CVaR)
-3. Optimize hyperparameters
-   → Discover best strategies
+---
+# Safety & Licensing
+**Use for research and education. Live deployment requires rigorous validation.** Trading carries risk; past performance is not predictive.
 
-Day (Execution - C++):
-1. Paper/demo trading                → ./run_trading.sh paper --dashboard
-2. Execute trades (<1µs latency)
-3. Real-time risk checks (<5µs)
-   → Live trading with risk controls
-
-Always (Monitoring):
-- Dashboard                          → ./run_trading.sh monitor-only --dashboard
-- Real-time PnL tracking
-- Performance analytics
-   → Continuous feedback loop
-```
+License: MIT
 
 ---
 
-
-## Future Research Directions
-
-1. **Statistical Computing Optimization**
-   Designing algorithms with **lower space and time complexity**: numerical linear algebra optimizations, memory-efficient data structures, distributed computing frameworks for ultra-high-frequency settings.
-
-2. **Microstructure-Aware Strategy Adaptation**
-   Developing **adaptive HFT strategies** responsive to evolving market microstructures: order flow imbalance, spread dynamics, latency arbitrage—using online learning and reinforcement frameworks optimized for ultra-low latency execution.
-
----
-
-## Disclaimer
-
-**FOR EDUCATIONAL AND RESEARCH PURPOSES ONLY**
-This software is **not intended for live trading** without extensive testing.
-Trading involves substantial risk. Past performance does not guarantee future results.
-
----
-
-## Acknowledgments
-
-Built using: [Pybind11](https://github.com/pybind/pybind11), [PyTorch](https://pytorch.org/), [JAX](https://github.com/google/jax), [NumPy](https://numpy.org/), [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
-
-**License**: MIT
-
----
-
-When curiosity meets motion, every millisecond holds the spark of alpha 🌅
+When curiosity meets motion, every millisecond holds the spark of alpha. 🌅

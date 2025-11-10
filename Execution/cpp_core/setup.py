@@ -7,7 +7,8 @@ ext_modules = [
         [
             "bindings/all_bindings.cpp",   # ✅ Merge绑定
             "src/data_feed.cpp",
-            "src/order.cpp"
+            "src/order.cpp",
+            "src/slippage_calculator.cpp"  # Slippage计算器实现
         ],
         include_dirs=["include"],
     ),
@@ -18,6 +19,8 @@ setup(
     version="0.2",
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
+    install_requires=["pybind11>=2.10"],
+    setup_requires=["pybind11>=2.10"],
 )
 
 

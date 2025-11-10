@@ -1,9 +1,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 #include "data_feed.h"
 #include "order.hpp"
 #include "fast_orderbook.hpp"
 #include "order_executor.hpp"
+#include "slippage_calculator.hpp"
 
 namespace py = pybind11;
 
@@ -97,4 +99,48 @@ PYBIND11_MODULE(cpp_trading2, m) {
         .def("get_total_commission", &hft::OrderExecutor::get_total_commission)
         .def("get_total_slippage", &hft::OrderExecutor::get_total_slippage)
         .def("reset", &hft::OrderExecutor::reset);
+
+    // --- Bind SlippageCalculator ---
+    py::class_<hft::SlippageCalculator::SlippageParams>(m, "SlippageParams")
+        .def(py::init<>())
+        .def_readwrite("base_slippage_bps", &hft::SlippageCalculator::SlippageParams::base_slippage_bps)
+        .def_readwrite("volatility", &hft::SlippageCalculator::SlippageParams::volatility)
+        .def_readwrite("liquidity_factor", &hft::SlippageCalculator::SlippageParams::liquidity_factor)
+        .def_readwrite("size_threshold", &hft::SlippageCalculator::SlippageParams::size_threshold);
+
+    py::class_<hft::SlippageCalculator>(m, "SlippageCalculator")
+        .def(py::init<>())
+        .def(py::init<const hft::SlippageCalculator::SlippageParams&>())
+        .def("calculate_batch", [](hft::SlippageCalculator& calc,
+                                   py::array_t<double> prices,
+                                   py::array_t<double> quantities,
+                                   py::array_t<double> mid_prices,
+                                   py::array_t<int> sides) {
+            auto prices_buf = prices.request();
+            auto quantities_buf = quantities.request();
+            auto mid_prices_buf = mid_prices.request();
+            auto sides_buf = sides.request();
+            
+            size_t n = prices_buf.size;
+            if (quantities_buf.size != n || mid_prices_buf.size != n || sides_buf.size != n) {
+                throw std::runtime_error("All arrays must have the same size");
+            }
+            
+            std::vector<double> prices_vec(static_cast<double*>(prices_buf.ptr),
+                                          static_cast<double*>(prices_buf.ptr) + n);
+            std::vector<double> quantities_vec(static_cast<double*>(quantities_buf.ptr),
+                                             static_cast<double*>(quantities_buf.ptr) + n);
+            std::vector<double> mid_prices_vec(static_cast<double*>(mid_prices_buf.ptr),
+                                              static_cast<double*>(mid_prices_buf.ptr) + n);
+            std::vector<int> sides_vec(static_cast<int*>(sides_buf.ptr),
+                                      static_cast<int*>(sides_buf.ptr) + n);
+            
+            std::vector<double> slippage_costs;
+            calc.calculate_batch(prices_vec, quantities_vec, mid_prices_vec, sides_vec, slippage_costs);
+            
+            return py::array_t<double>(slippage_costs.size(), slippage_costs.data());
+        })
+        .def("calculate_single", &hft::SlippageCalculator::calculate_single)
+        .def("set_params", &hft::SlippageCalculator::set_params)
+        .def("get_params", &hft::SlippageCalculator::get_params);
 }
