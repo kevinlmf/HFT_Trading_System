@@ -1,0 +1,48 @@
+{
+  "profiling": {
+    "price_formation": {
+      "midprice_drift": -2.2907594200396385e-06,
+      "volatility_clustering": 0.09037519315497376,
+      "autocorrelation_1lag": -0.07210289148522397,
+      "autocorrelation_5lag": -0.043238980157616194,
+      "price_jump_frequency": 0.013205678441729944,
+      "price_jump_magnitude": 0.0007863792769985028
+    },
+    "liquidity": {
+      "spread_mean": 5.926270627062701,
+      "spread_std": 7.789021844463188,
+      "depth_imbalance": NaN,
+      "depth_total": NaN,
+      "resiliency": 0.0,
+      "depth_volatility": 0.0
+    },
+    "order_flow": {
+      "arrival_rate_buy": 1275.0,
+      "arrival_rate_sell": 1275.0,
+      "cancel_ratio": 0.3,
+      "fill_ratio": 0.7,
+      "order_size_mean": 100.0,
+      "order_size_std": 50.0
+    },
+    "market_impact": {
+      "permanent_impact": 0.0,
+      "temporary_impact": 0.0,
+      "recovery_time": 20.0,
+      "impact_decay_rate": 0.0
+    }
+  },
+  "hypotheses": [
+    {
+      "name": "CancellationRate",
+      "category": "volatility",
+      "economic_motivation": "高撤单率反映市场不确定性增加，流动性提供者频繁调整报价，导致波动性上升",
+      "formula": "CancelRate = CanceledOrders / TotalOrders",
+      "expected_direction": "正相关（对volatility）"
+    }
+  ],
+  "summary": {
+    "total_hypotheses": 1,
+    "valid_factors": [],
+    "research_complete": true
+  }
+}

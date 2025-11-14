@@ -1,0 +1,94 @@
+Warning: CuPy not available. Install with: pip install cupy
+================================================================================
+Slippage Performance Benchmark
+================================================================================
+
+Compare Python loop, Python (NumPy), C++, and CUDA implementations of the slippage calculation.
+Lower latency is critical for HFT execution, so we measure each backend across multiple batch sizes.
+
+Batch sizes: [100, 1000, 10000, 100000]
+Each measurement is averaged over 5 runs.
+
+
+Orders per batch: 100
+  Python (loop):  0.09 ms, 1154849 orders/sec
+  Python (NumPy): 0.01 ms, 12793607 orders/sec
+  C++:            0.03 ms, 2902778 orders/sec
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+  CUDA:           0.01 ms, 14319994 orders/sec
+
+Orders per batch: 1,000
+  Python (loop):  0.85 ms, 1173422 orders/sec
+  Python (NumPy): 0.01 ms, 97165051 orders/sec
+  C++:            0.01 ms, 111006883 orders/sec
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+  CUDA:           0.01 ms, 106385858 orders/sec
+
+Orders per batch: 10,000
+  Python (loop):  8.44 ms, 1184256 orders/sec
+  Python (NumPy): 0.03 ms, 306437104 orders/sec
+  C++:            0.02 ms, 446931529 orders/sec
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+  CUDA:           0.03 ms, 317546386 orders/sec
+
+Orders per batch: 100,000
+  Python (loop):  85.14 ms, 1174583 orders/sec
+  Python (NumPy): 1.01 ms, 99344325 orders/sec
+  C++:            0.63 ms, 158797355 orders/sec
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+Warning: CUDA not available. Falling back to CPU.
+  CUDA:           0.56 ms, 177514840 orders/sec
+
+================================================================================
+Slippage Benchmark Summary
+================================================================================
+
+Largest batch size: 100,000 orders
+
+Execution time (ms):
+  Python (loop):  85.14 ms
+  Python (NumPy): 1.01 ms
+  C++:            0.63 ms
+  CUDA:           0.56 ms
+
+Throughput (orders/sec):
+  Python (loop):  1,174,583
+  Python (NumPy): 99,344,325
+  C++:            158,797,355
+  CUDA:           177,514,840
+
+Speed-up vs Python loop:
+  Python (NumPy): 84.58x
+  C++:            135.19x
+  CUDA:           151.13x
+
+--------------------------------------------------------------------------------
+HFT throughput target (1,000 orders/sec)
+--------------------------------------------------------------------------------
+
+Target throughput: 1,000 orders/sec
+  Python (loop):  0.001 ms/order (0.9 ms per 1k orders)
+  Python (NumPy): 0.000 ms/order (0.0 ms per 1k orders)
+  C++:            0.000 ms/order (0.0 ms per 1k orders)
+  CUDA:           0.000 ms/order (0.0 ms per 1k orders)
+
+================================================================================
+
+Plots saved to: /Users/mengfanlong/Downloads/Projects/Quant/HFT/HFT_System/Monitoring/benchmarks/slippage_benchmark_results.png
+
+Benchmark complete!
