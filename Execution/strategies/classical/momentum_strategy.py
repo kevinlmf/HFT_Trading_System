@@ -178,7 +178,9 @@ class MomentumStrategy:
                 continue
 
             if self.volatility_adjustment:
-                vol = _safe_pct_change(close).rolling(period, min_periods=5).std().iloc[-1]
+                # min_periods must be <= window size
+                min_periods = min(5, period)
+                vol = _safe_pct_change(close).rolling(period, min_periods=min_periods).std().iloc[-1]
                 risk_adj = ret_p / vol if (vol is not None and np.isfinite(vol) and vol > 0) else ret_p
             else:
                 risk_adj = ret_p
@@ -307,8 +309,10 @@ class MomentumStrategy:
             gain = delta.clip(lower=0.0)
             loss = (-delta).clip(lower=0.0)
             roll = 14
-            avg_gain = gain.rolling(roll, min_periods=roll).mean()
-            avg_loss = loss.rolling(roll, min_periods=roll).mean()
+            # min_periods should be <= roll, but allow some flexibility
+            min_periods_rsi = max(1, min(roll, len(gain)))
+            avg_gain = gain.rolling(roll, min_periods=min_periods_rsi).mean()
+            avg_loss = loss.rolling(roll, min_periods=min_periods_rsi).mean()
             rs = avg_gain / avg_loss.replace(0.0, np.nan)
             rsi = 100.0 - (100.0 / (1.0 + rs))
             rsi = rsi.fillna(method="bfill").fillna(method="ffill")
@@ -334,12 +338,18 @@ class MomentumStrategy:
         if "sma_20" in df.columns:
             sma20 = pd.Series(df["sma_20"]).astype(float)
         else:
-            sma20 = close.rolling(20, min_periods=5).mean()
+            # Use adaptive min_periods based on available data
+            sma_period = 20
+            min_periods_sma = min(5, sma_period, len(close))
+            sma20 = close.rolling(sma_period, min_periods=min_periods_sma).mean()
 
         if "sma_50" in df.columns:
             sma50 = pd.Series(df["sma_50"]).astype(float)
         else:
-            sma50 = close.rolling(50, min_periods=10).mean()
+            # Use adaptive min_periods for SMA50
+            sma50_period = 50
+            min_periods_sma50 = min(10, sma50_period, len(close))
+            sma50 = close.rolling(sma50_period, min_periods=min_periods_sma50).mean()
 
         c = _last_float(close, default=np.nan)
         s20 = _last_float(sma20, default=np.nan)
@@ -379,7 +389,10 @@ class MomentumStrategy:
                 continue
 
             if self.volatility_adjustment:
-                vol = _safe_pct_change(close).rolling(60, min_periods=10).std().iloc[-1]
+                # Use adaptive min_periods for volatility
+                vol_period = 60
+                min_periods_vol = min(10, vol_period, len(close))
+                vol = _safe_pct_change(close).rolling(vol_period, min_periods=min_periods_vol).std().iloc[-1]
                 if vol is not None and np.isfinite(vol) and vol > 0:
                     mom = mom / vol
             momentum_scores[symbol] = float(mom)

@@ -196,23 +196,40 @@ class AdaptiveStrategyRouter:
         H < 0.5: mean reverting
         H = 0.5: random walk
         """
+        if len(prices) < 4:
+            return 0.5
+        
         lags = range(2, min(20, len(prices) // 2))
         tau = []
+        valid_lags = []
+        
         for lag in lags:
+            if lag >= len(prices):
+                continue
             std = np.sqrt(np.mean((prices[lag:] - prices[:-lag]) ** 2))
-            tau.append(std)
+            # Only include non-zero, positive values
+            if std > 1e-10:  # Avoid zero or very small values
+                tau.append(std)
+                valid_lags.append(lag)
 
         if len(tau) < 2:
             return 0.5
 
         tau = np.array(tau)
-        lags = np.array(list(lags))
+        lags_array = np.array(valid_lags)
 
-        # Fit log(tau) vs log(lag)
-        poly = np.polyfit(np.log(lags), np.log(tau), 1)
-        hurst = poly[0]
+        # Ensure all values are positive before taking log
+        if np.any(lags_array <= 0) or np.any(tau <= 0):
+            return 0.5
 
-        return np.clip(hurst, 0, 1)
+        try:
+            # Fit log(tau) vs log(lag)
+            poly = np.polyfit(np.log(lags_array), np.log(tau), 1)
+            hurst = poly[0]
+            return np.clip(hurst, 0, 1)
+        except (ValueError, np.linalg.LinAlgError):
+            # If fitting fails, return neutral value
+            return 0.5
 
     def select_strategy(self, market_data: Dict) -> Tuple[str, float]:
         """
@@ -248,12 +265,20 @@ class AdaptiveStrategyRouter:
 
             perf = self.performance[strategy_name]
 
-            # If not enough trades, use lower confidence
+            # If not enough trades, use default confidence
             if perf.total_trades < self.min_trades_for_selection:
-                score = 0.3  # Default score for untested strategies
+                # For untested strategies, give them a base score that allows initial trading
+                # This ensures we can start trading even without historical performance
+                base_score = 0.4  # Higher base score for untested strategies
+                
+                # If regime is unknown, still allow trading (don't penalize too much)
+                if self.current_regime.regime_type == 'unknown':
+                    score = base_score  # Don't reduce for unknown regime
+                else:
+                    # Boost score based on regime confidence, but ensure minimum
+                    score = base_score * (0.6 + 0.4 * self.current_regime.confidence)
             else:
                 score = perf.get_score()
-
             # Boost score based on regime confidence
             score *= (0.5 + 0.5 * self.current_regime.confidence)
 

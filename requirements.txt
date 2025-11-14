@@ -25,6 +25,9 @@ pybind11>=2.11.0
 # Data handling
 h5py>=3.8.0
 tables>=3.8.0
+pyarrow>=12.0.0  # For Parquet format and fast columnar data
+fastparquet>=2023.0.0  # Alternative Parquet engine
+pybloom-live>=3.0.0  # Bloom Filter for fast existence checks
 
 # Optional: GPU support
 # For PyTorch CUDA: torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
@@ -41,3 +44,17 @@ tables>=3.8.0
 # jupyter>=1.0.0
 # ipython>=8.12.0
 # ipywidgets>=8.0.0
+
+# Market Data Connectors (可选)
+# Alpaca (已包含在基础依赖中)
+websockets>=11.0  # For WebSocket connections
+
+# Yahoo Finance (免费，无需API密钥)
+yfinance>=0.2.0
+
+# Binance (加密货币)
+python-binance>=1.0.0
+
+# Polygon.io (需要API密钥)
+# polygon-api-client>=1.0.0  # 如果需要REST API
+# WebSocket支持已通过websockets实现
