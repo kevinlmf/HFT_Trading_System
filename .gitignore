@@ -1,11 +1,3 @@
-# Results directory
-results/
-*.json
-*.csv
-*.html
-*.png
-*.txt
-
 # Python
 __pycache__/
 *.py[cod]
@@ -39,10 +31,6 @@ ENV/
 *.swp
 *.swo
 *~
-
-# Logs
-logs/
-*.log
 
 # OS
 .DS_Store
