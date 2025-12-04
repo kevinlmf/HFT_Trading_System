@@ -26,7 +26,7 @@ async def example_yahoo_finance():
     print("=" * 70)
     
     try:
-        from Data.connectors.yahoo_connector import YahooFinanceConnector
+        from Market_Data.yahoo_connector import YahooFinanceConnector
         
         # 创建连接器（无需API密钥）
         connector = YahooFinanceConnector(update_interval=10.0)  # 每10秒更新
@@ -68,7 +68,7 @@ async def example_binance():
     print("=" * 70)
     
     try:
-        from Data.connectors.binance_connector import BinanceConnector
+        from Market_Data.binance_connector import BinanceConnector
         
         # 创建连接器（数据订阅不需要API密钥）
         connector = BinanceConnector(testnet=True)  # 使用测试网
@@ -109,7 +109,7 @@ async def example_polygon():
     print("=" * 70)
     
     try:
-        from Data.connectors.polygon_connector import PolygonConnector
+        from Market_Data.polygon_connector import PolygonConnector
         
         # 需要API密钥
         api_key = os.environ.get('POLYGON_API_KEY')

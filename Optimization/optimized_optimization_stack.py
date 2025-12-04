@@ -18,8 +18,8 @@ warnings.filterwarnings('ignore')
 
 # QDB集成
 try:
-    from Data.qdb import QDB, create_qdb
-    from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
+    from QDB import QDB, create_qdb
+    from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
     QDB_AVAILABLE = True
 except ImportError:
     QDB_AVAILABLE = False
@@ -32,16 +32,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Optimization.optimization_stack import (
     OptimizationStack,
-    ModelObjective,
-    AlgorithmType,
     ExecutionBackend,
     StatisticalTheoryLayer,
     ModelExpressionLayer,
     AlgorithmDesignLayer,
     DataStructureLayer,
-    SystemImplementationLayer,
-    AlgorithmConfig
+    SystemImplementationLayer
 )
+from Optimization.optimization_types import ModelObjective, AlgorithmType, AlgorithmConfig
+
+# CVXPY Integration
+try:
+    from Optimization.cvxpy_optimizer import CVXPYOptimizer, CVXPY_AVAILABLE
+except ImportError:
+    CVXPY_AVAILABLE = False
+    CVXPYOptimizer = None
+
 
 
 class OptimizedDataLoader:
@@ -449,6 +455,46 @@ class EnhancedOptimizationStack(OptimizationStack):
             condition_number=condition_number,
             gpu_available=self.system_layer.gpu_available
         )
+
+        # 0. 尝试使用CVXPY优化器 (如果可用且适用)
+        if CVXPY_AVAILABLE and objective in [ModelObjective.MAXIMIZE_SHARPE, ModelObjective.MINIMIZE_VARIANCE, ModelObjective.MAXIMIZE_RETURN]:
+            try:
+                # 创建优化器
+                cvx_optimizer = CVXPYOptimizer(solver='OSQP')
+                
+                # 执行优化
+                result = cvx_optimizer.optimize_portfolio(
+                    mean_returns=mean_returns,
+                    cov_matrix=cov_matrix,
+                    objective=objective,
+                    constraints=constraints
+                )
+                
+                if result['success']:
+                    optimal_weights = result['weights']
+                    signals = self.system_layer.generate_signal(optimal_weights)
+                    
+                    return {
+                        'optimal_weights': dict(zip(valid_symbols, optimal_weights)),
+                        'signals': dict(zip(valid_symbols, signals)),
+                        'optimization_info': {
+                            'success': True,
+                            'iterations': result['solver_stats']['iterations'],
+                            'algorithm': 'CVXPY_' + result['solver_stats']['solver'],
+                            'data_source': 'QDB' if self.data_loader.use_qdb else 'traditional',
+                            'cache_used': cache_key in self.data_loader._covariance_cache,
+                            'message': 'Optimized using CVXPY'
+                        },
+                        'performance_metrics': {
+                            'portfolio_return': float(np.dot(optimal_weights, mean_returns)),
+                            'portfolio_std': float(np.sqrt(np.dot(optimal_weights, np.dot(cov_matrix, optimal_weights)))),
+                            'sharpe_ratio': float(np.dot(optimal_weights, mean_returns) / np.sqrt(np.dot(optimal_weights, np.dot(cov_matrix, optimal_weights))))
+                        }
+                    }
+            except Exception as e:
+                print(f"CVXPY optimization failed: {e}, falling back to SLSQP")
+                # Fallback to standard flow
+
         
         # 6. 定义优化目标函数（使用优化的数据结构）
         if objective == ModelObjective.MAXIMIZE_SHARPE:

@@ -38,6 +38,10 @@ QDB_OPTIMIZED=false  # Use optimized indexer (O(log n) instead of O(n))
 ENABLE_RESEARCH=true  # Enable Research Framework (microstructure profiling + factor discovery) - DEFAULT ENABLED
 RESEARCH_MODE="full"   # Options: "profiling_only", "factors_only", "full"
 RESEARCH_OUTPUT="./results/research"
+RESULTS_DIR="./results"
+
+# Auto-load QDB data configuration
+AUTO_LOAD_DATA=true  # Automatically download historical data to QDB if missing (default: true)
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -122,6 +126,14 @@ while [[ $# -gt 0 ]]; do
             CONNECTOR="$2"
             shift 2
             ;;
+        --auto-load-data)
+            AUTO_LOAD_DATA=true
+            shift
+            ;;
+        --no-auto-load-data)
+            AUTO_LOAD_DATA=false
+            shift
+            ;;
         --help|-h)
             cat << EOF
 End-to-End Trading System - Execution Script
@@ -166,6 +178,10 @@ OPTIONS:
                  - alphavantage: Alpha Vantage (free, 500 calls/day, requires API key)
                  - coinbase: Coinbase Pro (cryptocurrency, sandbox available)
                  - iexcloud: IEX Cloud (free, 50k messages/month, requires API key)
+  --auto-load-data
+                 Automatically download historical data to QDB if missing (default: enabled)
+  --no-auto-load-data
+                 Disable automatic data loading
   --dry-run      Show what would run without executing
   --no-log       Disable file logging
   --help         Show this help
@@ -262,8 +278,9 @@ init_qdb() {
     if [ "$ENABLE_QDB" = true ]; then
         echo -e "${BLUE}Initializing QDB...${NC}"
         
-        # Check if QDB module exists
-        if [ ! -f "Data/qdb/qdb.py" ]; then
+        # Check if QDB module exists (updated to new QDB package layout)
+        # Old path was Data/qdb/qdb.py; now we use the top-level QDB package.
+        if [ ! -f "QDB/qdb.py" ]; then
             echo -e "${YELLOW}⚠️  QDB module not found, skipping QDB initialization${NC}"
             ENABLE_QDB=false
             return
@@ -277,7 +294,7 @@ init_qdb() {
 import sys
 sys.path.insert(0, '.')
 try:
-    from Data.qdb import create_qdb
+    from QDB import create_qdb
     qdb = create_qdb(base_path='$QDB_PATH')
     print('✓ QDB initialized successfully')
     print(f'  Storage path: $QDB_PATH')
@@ -500,6 +517,107 @@ check_system_built
 # Initialize QDB if enabled
 init_qdb
 
+# Check and auto-load QDB data if needed (for complete-flow mode)
+check_and_load_qdb_data() {
+    if [ "$MODE" != "complete-flow" ] || [ "$ENABLE_QDB" != true ] || [ "$AUTO_LOAD_DATA" != true ]; then
+        return 0
+    fi
+    
+    if [ -z "$SYMBOLS" ]; then
+        return 0
+    fi
+    
+    echo -e "${BLUE}Checking QDB data availability...${NC}"
+    
+    # Check if data exists for the requested symbols
+    result=$(python3 -c "
+import sys
+sys.path.insert(0, '.')
+try:
+    from QDB import create_qdb
+    qdb = create_qdb(base_path='$QDB_PATH')
+    symbols = '$SYMBOLS'.split(',')
+    missing_symbols = []
+    
+    for symbol in symbols:
+        symbol = symbol.strip()
+        if not symbol:
+            continue
+        try:
+            df = qdb.load(symbol=symbol, start=None, end=None)
+            if df is None or len(df) == 0:
+                missing_symbols.append(symbol)
+        except Exception:
+            missing_symbols.append(symbol)
+    
+    if missing_symbols:
+        print('MISSING:' + ','.join(missing_symbols))
+    else:
+        print('OK')
+except Exception as e:
+    print(f'ERROR:{e}')
+" 2>/dev/null)
+    
+    if [[ "$result" == "OK" ]]; then
+        echo -e "${GREEN}✓ QDB data available for all symbols${NC}"
+        return 0
+    elif [[ "$result" == MISSING:* ]]; then
+        missing_symbols="${result#MISSING:}"
+        echo -e "${YELLOW}⚠️  QDB data missing for: $missing_symbols${NC}"
+        echo -e "${BLUE}Auto-loading historical data from Yahoo Finance...${NC}"
+        
+        # Check if load script exists
+        if [ ! -f "Market_Data/load_historical_data_to_qdb.py" ]; then
+            echo -e "${YELLOW}⚠️  Data loading script not found at Market_Data/load_historical_data_to_qdb.py${NC}"
+            echo -e "${YELLOW}   Please run manually: python Market_Data/load_historical_data_to_qdb.py --symbols $missing_symbols --days 365${NC}"
+            return 1
+        fi
+        
+        # Auto-load data (download last 365 days by default)
+        echo -e "${BLUE}Downloading last 365 days of daily data...${NC}"
+        python3 Market_Data/load_historical_data_to_qdb.py \
+            --symbols "$missing_symbols" \
+            --days 365 \
+            --interval 1d \
+            --qdb-path "$QDB_PATH" \
+            --data-version "$QDB_DATA_VERSION" 2>&1 | grep -E "(✓|✗|⚠️|下载|存储|成功|失败|处理|正在)" || true
+        
+        # Verify data was loaded
+        verify_result=$(python3 -c "
+import sys
+sys.path.insert(0, '.')
+from QDB import create_qdb
+qdb = create_qdb(base_path='$QDB_PATH')
+symbols = '$missing_symbols'.split(',')
+all_loaded = True
+for symbol in symbols:
+    symbol = symbol.strip()
+    if not symbol:
+        continue
+    try:
+        df = qdb.load(symbol=symbol, start=None, end=None)
+        if df is None or len(df) == 0:
+            all_loaded = False
+            break
+    except Exception:
+        all_loaded = False
+        break
+sys.exit(0 if all_loaded else 1)
+" 2>/dev/null)
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Historical data loaded successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Some data may not have loaded correctly, continuing with sample data${NC}"
+        fi
+    elif [[ "$result" == ERROR:* ]]; then
+        echo -e "${YELLOW}⚠️  Could not check QDB data: ${result#ERROR:}${NC}"
+    fi
+}
+
+# Check and auto-load QDB data if needed
+check_and_load_qdb_data
+
 # Execute based on mode
 case $MODE in
     paper)
@@ -526,12 +644,12 @@ from datetime import datetime
 sys.path.insert(0, os.getcwd())
 
 from Execution.trading.trading_engine import RealTimeTradingEngine
-from Data.connectors.alpaca_connector import AlpacaConnector
-from Execution.strategies.strategy_registry import get_strategy
+from Market_Data.alpaca_connector import AlpacaConnector
+from Strategy_Construction.strategy_registry import get_strategy
 
 # Import strategy adapters to register strategies
 try:
-    from Execution.strategies.strategy_adapters import MomentumStrategyAdapter, MeanReversionStrategyAdapter
+    from Strategy_Construction.strategy_adapters import MomentumStrategyAdapter, MeanReversionStrategyAdapter
     print("✓ Strategy adapters loaded")
 except ImportError as e:
     print(f"⚠️  Strategy adapters not available: {e}")
@@ -542,7 +660,7 @@ print(f"Using connector: {CONNECTOR_TYPE}")
 
 if CONNECTOR_TYPE == 'yahoo':
     try:
-        from Data.connectors.yahoo_connector import YahooFinanceConnector
+        from Market_Data.yahoo_connector import YahooFinanceConnector
         print("✓ Yahoo Finance connector loaded")
     except ImportError as e:
         print(f"❌ Yahoo Finance connector not available: {e}")
@@ -550,7 +668,7 @@ if CONNECTOR_TYPE == 'yahoo':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'binance':
     try:
-        from Data.connectors.binance_connector import BinanceConnector
+        from Market_Data.binance_connector import BinanceConnector
         print("✓ Binance connector loaded")
     except ImportError as e:
         print(f"❌ Binance connector not available: {e}")
@@ -558,7 +676,7 @@ elif CONNECTOR_TYPE == 'binance':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'polygon':
     try:
-        from Data.connectors.polygon_connector import PolygonConnector
+        from Market_Data.polygon_connector import PolygonConnector
         print("✓ Polygon.io connector loaded")
     except ImportError as e:
         print(f"❌ Polygon.io connector not available: {e}")
@@ -566,14 +684,14 @@ elif CONNECTOR_TYPE == 'polygon':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'alphavantage':
     try:
-        from Data.connectors.alphavantage_connector import AlphaVantageConnector
+        from Market_Data.alphavantage_connector import AlphaVantageConnector
         print("✓ Alpha Vantage connector loaded")
     except ImportError as e:
         print(f"❌ Alpha Vantage connector not available: {e}")
         sys.exit(1)
 elif CONNECTOR_TYPE == 'coinbase':
     try:
-        from Data.connectors.coinbase_connector import CoinbaseProConnector
+        from Market_Data.coinbase_connector import CoinbaseProConnector
         print("✓ Coinbase Pro connector loaded")
     except ImportError as e:
         print(f"❌ Coinbase Pro connector not available: {e}")
@@ -581,7 +699,7 @@ elif CONNECTOR_TYPE == 'coinbase':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'iexcloud':
     try:
-        from Data.connectors.iexcloud_connector import IEXCloudConnector
+        from Market_Data.iexcloud_connector import IEXCloudConnector
         print("✓ IEX Cloud connector loaded")
     except ImportError as e:
         print(f"❌ IEX Cloud connector not available: {e}")
@@ -589,7 +707,7 @@ elif CONNECTOR_TYPE == 'iexcloud':
         sys.exit(1)
 else:  # Default to Alpaca
     try:
-        from Data.connectors.alpaca_connector import AlpacaConnector
+        from Market_Data.alpaca_connector import AlpacaConnector
         print("✓ Alpaca connector loaded")
     except ImportError as e:
         print(f"❌ Alpaca connector not available: {e}")
@@ -604,15 +722,15 @@ QDB_OPTIMIZED = os.environ.get('QDB_OPTIMIZED', 'false').lower() == 'true'
 
 if ENABLE_QDB:
     try:
-        from Data.qdb import create_qdb
-        from Data.qdb.ingestion import RealtimeCollector
+        from QDB import create_qdb
+        from QDB.ingestion import RealtimeCollector
         
         # Use optimized indexer if requested
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
-                from Data.qdb.cache import DataCache, CacheConfig
-                from Data.qdb.versioning import DataVersioning
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.cache import DataCache, CacheConfig
+                from QDB.versioning import DataVersioning
                 
                 # Create QDB with optimized indexer
                 import sys
@@ -630,7 +748,7 @@ if ENABLE_QDB:
                     
                     def store(self, symbol, df, **kwargs):
                         # Use original indexer for storing (compatibility)
-                        from Data.qdb.indexer import DataIndexer
+                        from QDB.indexer import DataIndexer
                         original_indexer = DataIndexer(base_path=str(base_path))
                         file_path = original_indexer.add_data(symbol, df, kwargs.get('data_version', '1.0'))
                         # Update optimized index
@@ -673,6 +791,13 @@ async def main():
     capital = float(os.environ.get('CAPITAL', '100000'))
     strategy_names = os.environ.get('STRATEGIES', 'momentum').split(',')
     interval = float(os.environ.get('UPDATE_INTERVAL', '5'))
+    
+    # Ensure results directory exists
+    results_dir = os.environ.get('RESULTS_DIR', './results')
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(f'{results_dir}/strategies', exist_ok=True)
+    os.makedirs(f'{results_dir}/research', exist_ok=True)
+    print(f'Results will be saved to: {os.path.abspath(results_dir)}')
 
     print(f"Symbols: {symbols}")
     print(f"Capital: \${capital:,.2f}")
@@ -688,7 +813,10 @@ async def main():
     if ENABLE_RESEARCH:
         print(f"Research Framework: Enabled (mode: {RESEARCH_MODE})")
         try:
-            from Research import CompleteResearchFramework
+            from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+            from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
+            from Alpha_Modeling.statistical_validation import StatisticalValidator
+            from Alpha_Modeling.ml_validation import MLValidator
             from pathlib import Path
             import pandas as pd
             
@@ -734,11 +862,28 @@ async def main():
                         print(f"  ⚠️  Could not load {symbol} from QDB: {e}")
                 
                 if market_data:
-                    framework = CompleteResearchFramework()
-                    results = framework.run_complete_research_pipeline(market_data, forward_returns)
+                    # Run research pipeline manually
+                    profiler = MicrostructureProfiler()
+                    profile_results = profiler.analyze(market_data)
+                    
+                    generator = FactorHypothesisGenerator()
+                    factors = generator.generate(profile_results)
+                    
+                    validator = StatisticalValidator()
+                    validation_results = validator.validate(factors, forward_returns if forward_returns is not None else market_data.get('returns', pd.Series()))
                     
                     # Export results
-                    framework.export_results(f"{RESEARCH_OUTPUT}/research_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                    import json
+                    research_results = {
+                        'profiling': profile_results,
+                        'factors': [f.__dict__ for f in factors] if factors else [],
+                        'validation': validation_results.__dict__ if hasattr(validation_results, '__dict__') else str(validation_results),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_file = f"{RESEARCH_OUTPUT}/research_{timestamp}.json"
+                    with open(output_file, 'w') as f:
+                        json.dump(research_results, f, indent=2, default=str)
                     print(f"\\n✓ Research results exported to {RESEARCH_OUTPUT}")
                 else:
                     print("  ⚠️  No market data available for research")
@@ -876,6 +1021,7 @@ PYTHON_SCRIPT
         export ENABLE_RESEARCH="$ENABLE_RESEARCH"
         export RESEARCH_MODE="$RESEARCH_MODE"
         export RESEARCH_OUTPUT="$RESEARCH_OUTPUT"
+        export RESULTS_DIR="./results"
         export ENABLE_VALIDATION="true"  # Enable quick validation by default
         export VALIDATION_MIN_TICKS="50"
         export VALIDATION_TIMEOUT="0.5"  # 500ms timeout
@@ -883,6 +1029,9 @@ PYTHON_SCRIPT
         # Run trading engine
         if [ "$ENABLE_LOGGING" = true ]; then
             LOGFILE="$LOGS_DIR/paper_trading_$(date +%Y%m%d_%H%M%S).log"
+            RESULTS_DIR="./results"
+            mkdir -p "$RESULTS_DIR"
+            export RESULTS_DIR="$RESULTS_DIR"
             python3 /tmp/run_paper_trading.py 2>&1 | tee "$LOGFILE"
         else
             python3 /tmp/run_paper_trading.py
@@ -916,7 +1065,7 @@ if ENABLE_QDB:
     try:
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
                 indexer = ImprovedOptimizedIndexer(base_path=QDB_PATH)
                 print(f'✓ QDB initialized with OPTIMIZED indexer for backtest: {QDB_PATH}')
                 print(f'  Using data version: {QDB_DATA_VERSION}')
@@ -934,11 +1083,11 @@ if ENABLE_QDB:
                 qdb = OptimizedQDBWrapper(indexer)
             except ImportError:
                 print('⚠️  Optimized indexer not available, using standard QDB')
-                from Data.qdb import create_qdb
+                from QDB import create_qdb
                 qdb = create_qdb(base_path=QDB_PATH)
                 print(f'✓ QDB initialized for backtest: {QDB_PATH}')
         else:
-            from Data.qdb import create_qdb
+            from QDB import create_qdb
             qdb = create_qdb(base_path=QDB_PATH)
             print(f'✓ QDB initialized for backtest: {QDB_PATH}')
             print(f'  Using data version: {QDB_DATA_VERSION}')
@@ -955,7 +1104,8 @@ RESEARCH_OUTPUT = '$RESEARCH_OUTPUT'
 
 if ENABLE_RESEARCH:
     try:
-        from Research import CompleteResearchFramework
+        from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
         from pathlib import Path
         from datetime import datetime
         import pandas as pd
@@ -999,9 +1149,32 @@ if ENABLE_RESEARCH:
             
             if market_data:
                 Path(RESEARCH_OUTPUT).mkdir(parents=True, exist_ok=True)
-                framework = CompleteResearchFramework()
-                results = framework.run_complete_research_pipeline(market_data, forward_returns)
-                framework.export_results(f'{RESEARCH_OUTPUT}/research_backtest_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.json')
+                # Run research pipeline manually
+                from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+                from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
+                from Alpha_Modeling.statistical_validation import StatisticalValidator
+                
+                profiler = MicrostructureProfiler()
+                profile_results = profiler.analyze(market_data)
+                
+                generator = FactorHypothesisGenerator()
+                factors = generator.generate(profile_results)
+                
+                validator = StatisticalValidator()
+                validation_results = validator.validate(factors, forward_returns if forward_returns is not None else market_data.get('returns', pd.Series()))
+                
+                # Export results
+                import json
+                research_results = {
+                    'profiling': profile_results,
+                    'factors': [f.__dict__ for f in factors] if factors else [],
+                    'validation': validation_results.__dict__ if hasattr(validation_results, '__dict__') else str(validation_results),
+                    'timestamp': datetime.now().isoformat()
+                }
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_file = f'{RESEARCH_OUTPUT}/research_backtest_{timestamp}.json'
+                with open(output_file, 'w') as f:
+                    json.dump(research_results, f, indent=2, default=str)
                 print(f'\\n✓ Research results exported to {RESEARCH_OUTPUT}')
             else:
                 print('  ⚠️  No market data available for research')
@@ -1026,7 +1199,7 @@ if ENABLE_QDB:
     try:
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
                 indexer = ImprovedOptimizedIndexer(base_path=QDB_PATH)
                 class OptimizedQDBWrapper:
                     def __init__(self, indexer):
@@ -1039,10 +1212,10 @@ if ENABLE_QDB:
                         return self.indexer.load_parallel(symbol, start_time, end_time)
                 qdb = OptimizedQDBWrapper(indexer)
             except ImportError:
-                from Data.qdb import create_qdb
+                from QDB import create_qdb
                 qdb = create_qdb(base_path=QDB_PATH)
         else:
-            from Data.qdb import create_qdb
+            from QDB import create_qdb
             qdb = create_qdb(base_path=QDB_PATH)
     except:
         ENABLE_QDB = False
@@ -1055,7 +1228,8 @@ RESEARCH_OUTPUT = '$RESEARCH_OUTPUT'
 
 if ENABLE_RESEARCH:
     try:
-        from Research import CompleteResearchFramework
+        from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
         from pathlib import Path
         from datetime import datetime
         import pandas as pd
@@ -1099,9 +1273,32 @@ if ENABLE_RESEARCH:
             
             if market_data:
                 Path(RESEARCH_OUTPUT).mkdir(parents=True, exist_ok=True)
-                framework = CompleteResearchFramework()
-                results = framework.run_complete_research_pipeline(market_data, forward_returns)
-                framework.export_results(f'{RESEARCH_OUTPUT}/research_backtest_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.json')
+                # Run research pipeline manually
+                from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+                from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
+                from Alpha_Modeling.statistical_validation import StatisticalValidator
+                
+                profiler = MicrostructureProfiler()
+                profile_results = profiler.analyze(market_data)
+                
+                generator = FactorHypothesisGenerator()
+                factors = generator.generate(profile_results)
+                
+                validator = StatisticalValidator()
+                validation_results = validator.validate(factors, forward_returns if forward_returns is not None else market_data.get('returns', pd.Series()))
+                
+                # Export results
+                import json
+                research_results = {
+                    'profiling': profile_results,
+                    'factors': [f.__dict__ for f in factors] if factors else [],
+                    'validation': validation_results.__dict__ if hasattr(validation_results, '__dict__') else str(validation_results),
+                    'timestamp': datetime.now().isoformat()
+                }
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_file = f'{RESEARCH_OUTPUT}/research_backtest_{timestamp}.json'
+                with open(output_file, 'w') as f:
+                    json.dump(research_results, f, indent=2, default=str)
                 print(f'\\n✓ Research results exported to {RESEARCH_OUTPUT}')
             else:
                 print('  ⚠️  No market data available for research')
@@ -1154,12 +1351,12 @@ from datetime import datetime
 sys.path.insert(0, os.getcwd())
 
 from Execution.trading.trading_engine import RealTimeTradingEngine
-from Data.connectors.alpaca_connector import AlpacaConnector
-from Execution.strategies.strategy_registry import get_strategy
+from Market_Data.alpaca_connector import AlpacaConnector
+from Strategy_Construction.strategy_registry import get_strategy
 
 # Import strategy adapters to register strategies
 try:
-    from Execution.strategies.strategy_adapters import MomentumStrategyAdapter, MeanReversionStrategyAdapter
+    from Strategy_Construction.strategy_adapters import MomentumStrategyAdapter, MeanReversionStrategyAdapter
     print("✓ Strategy adapters loaded")
 except ImportError as e:
     print(f"⚠️  Strategy adapters not available: {e}")
@@ -1170,7 +1367,7 @@ print(f"Using connector: {CONNECTOR_TYPE}")
 
 if CONNECTOR_TYPE == 'yahoo':
     try:
-        from Data.connectors.yahoo_connector import YahooFinanceConnector
+        from Market_Data.yahoo_connector import YahooFinanceConnector
         print("✓ Yahoo Finance connector loaded")
     except ImportError as e:
         print(f"❌ Yahoo Finance connector not available: {e}")
@@ -1178,7 +1375,7 @@ if CONNECTOR_TYPE == 'yahoo':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'binance':
     try:
-        from Data.connectors.binance_connector import BinanceConnector
+        from Market_Data.binance_connector import BinanceConnector
         print("✓ Binance connector loaded")
     except ImportError as e:
         print(f"❌ Binance connector not available: {e}")
@@ -1186,7 +1383,7 @@ elif CONNECTOR_TYPE == 'binance':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'polygon':
     try:
-        from Data.connectors.polygon_connector import PolygonConnector
+        from Market_Data.polygon_connector import PolygonConnector
         print("✓ Polygon.io connector loaded")
     except ImportError as e:
         print(f"❌ Polygon.io connector not available: {e}")
@@ -1194,14 +1391,14 @@ elif CONNECTOR_TYPE == 'polygon':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'alphavantage':
     try:
-        from Data.connectors.alphavantage_connector import AlphaVantageConnector
+        from Market_Data.alphavantage_connector import AlphaVantageConnector
         print("✓ Alpha Vantage connector loaded")
     except ImportError as e:
         print(f"❌ Alpha Vantage connector not available: {e}")
         sys.exit(1)
 elif CONNECTOR_TYPE == 'coinbase':
     try:
-        from Data.connectors.coinbase_connector import CoinbaseProConnector
+        from Market_Data.coinbase_connector import CoinbaseProConnector
         print("✓ Coinbase Pro connector loaded")
     except ImportError as e:
         print(f"❌ Coinbase Pro connector not available: {e}")
@@ -1209,7 +1406,7 @@ elif CONNECTOR_TYPE == 'coinbase':
         sys.exit(1)
 elif CONNECTOR_TYPE == 'iexcloud':
     try:
-        from Data.connectors.iexcloud_connector import IEXCloudConnector
+        from Market_Data.iexcloud_connector import IEXCloudConnector
         print("✓ IEX Cloud connector loaded")
     except ImportError as e:
         print(f"❌ IEX Cloud connector not available: {e}")
@@ -1217,7 +1414,7 @@ elif CONNECTOR_TYPE == 'iexcloud':
         sys.exit(1)
 else:  # Default to Alpaca
     try:
-        from Data.connectors.alpaca_connector import AlpacaConnector
+        from Market_Data.alpaca_connector import AlpacaConnector
         print("✓ Alpaca connector loaded")
     except ImportError as e:
         print(f"❌ Alpaca connector not available: {e}")
@@ -1232,15 +1429,15 @@ QDB_OPTIMIZED = os.environ.get('QDB_OPTIMIZED', 'false').lower() == 'true'
 
 if ENABLE_QDB:
     try:
-        from Data.qdb import create_qdb
-        from Data.qdb.ingestion import RealtimeCollector
+        from QDB import create_qdb
+        from QDB.ingestion import RealtimeCollector
         
         # Use optimized indexer if requested
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
-                from Data.qdb.cache import DataCache, CacheConfig
-                from Data.qdb.versioning import DataVersioning
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.cache import DataCache, CacheConfig
+                from QDB.versioning import DataVersioning
                 from pathlib import Path
                 import pandas as pd
                 
@@ -1255,7 +1452,7 @@ if ENABLE_QDB:
                         self.base_path = base_path
                     
                     def store(self, symbol, df, **kwargs):
-                        from Data.qdb.indexer import DataIndexer
+                        from QDB.indexer import DataIndexer
                         original_indexer = DataIndexer(base_path=str(base_path))
                         file_path = original_indexer.add_data(symbol, df, kwargs.get('data_version', '1.0'))
                         self.indexer.add_data(symbol, df.index.min(), df.index.max(), file_path)
@@ -1466,10 +1663,19 @@ PYTHON_SCRIPT
             python3 -c "
 import sys
 sys.path.insert(0, '.')
-from Execution.engine.integrated_trading_flow import IntegratedTradingFlow
-from Execution.risk_control.portfolio_manager import RiskModel
-from Execution.engine.complete_trading_flow import create_sample_strategies
-from Execution.engine.pipeline import create_sample_data
+from Execution.engine.integrated_trading_flow import IntegratedTradingFlow, create_sample_strategies, create_sample_data
+try:
+    from Risk_Control.portfolio_manager import RiskModel
+except ImportError:
+    # Fallback if RiskModel not available
+    from enum import Enum
+    class RiskModel(Enum):
+        EQUAL_WEIGHT = "equal_weight"
+        INVERSE_VOLATILITY = "inverse_volatility"
+        MEAN_VARIANCE = "mean_variance"
+        RISK_PARITY = "risk_parity"
+        BLACK_LITTERMAN = "black_litterman"
+        HIERARCHICAL_RISK_PARITY = "hrp"
 force_slippage_impl = '${SLIPPAGE_IMPL}'
 force_slippage_impl = force_slippage_impl if force_slippage_impl else None
 import pandas as pd
@@ -1484,7 +1690,7 @@ if ENABLE_QDB:
     try:
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
                 indexer = ImprovedOptimizedIndexer(base_path=QDB_PATH)
                 print(f'✓ QDB initialized with OPTIMIZED indexer for complete flow: {QDB_PATH}')
                 print(f'  Data version: {QDB_DATA_VERSION}')
@@ -1501,12 +1707,12 @@ if ENABLE_QDB:
                 qdb = OptimizedQDBWrapper(indexer)
             except ImportError:
                 print('⚠️  Optimized indexer not available, using standard QDB')
-                from Data.qdb import create_qdb
+                from QDB import create_qdb
                 qdb = create_qdb(base_path=QDB_PATH)
                 print(f'✓ QDB initialized for complete flow: {QDB_PATH}')
                 print(f'  Data version: {QDB_DATA_VERSION}')
         else:
-            from Data.qdb import create_qdb
+            from QDB import create_qdb
             qdb = create_qdb(base_path=QDB_PATH)
             print(f'✓ QDB initialized for complete flow: {QDB_PATH}')
             print(f'  Data version: {QDB_DATA_VERSION}')
@@ -1550,7 +1756,8 @@ RESEARCH_OUTPUT = '$RESEARCH_OUTPUT'
 
 if ENABLE_RESEARCH:
     try:
-        from Research import CompleteResearchFramework
+        from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+        from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
         from pathlib import Path
         from datetime import datetime
         
@@ -1599,10 +1806,216 @@ if ENABLE_RESEARCH:
         
         if market_data:
             Path(RESEARCH_OUTPUT).mkdir(parents=True, exist_ok=True)
-            framework = CompleteResearchFramework()
-            results = framework.run_complete_research_pipeline(market_data, forward_returns)
-            framework.export_results(f'{RESEARCH_OUTPUT}/research_complete_flow_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.json')
+            # Run research pipeline manually
+            from Microstructure_Analysis.microstructure_profiling import MicrostructureProfiler
+            from Alpha_Modeling.factor_hypothesis import FactorHypothesisGenerator
+            from Alpha_Modeling.statistical_validation import StatisticalValidator
+            
+            profiler = MicrostructureProfiler()
+            profile_results = profiler.analyze(market_data)
+            
+            generator = FactorHypothesisGenerator()
+            factors = generator.generate(profile_results)
+            
+            validator = StatisticalValidator()
+            validation_results = validator.validate(factors, forward_returns if forward_returns is not None else market_data.get('returns', pd.Series()))
+            
+            # Export results
+            import json
+            research_results = {
+                'profiling': profile_results,
+                'factors': [f.__dict__ for f in factors] if factors else [],
+                'validation': validation_results.__dict__ if hasattr(validation_results, '__dict__') else str(validation_results),
+                'timestamp': datetime.now().isoformat()
+            }
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f'{RESEARCH_OUTPUT}/research_complete_flow_{timestamp}.json'
+            with open(output_file, 'w') as f:
+                json.dump(research_results, f, indent=2, default=str)
             print(f'\\n✓ Research results exported to {RESEARCH_OUTPUT}')
+
+            # Derive a lightweight factor attribution summary
+            try:
+                factors_list = research_results.get('factors', [])
+                validation_str = research_results.get('validation', '{}')
+                
+                # Parse validation results (it's a string representation of dict)
+                validation_dict = {}
+                try:
+                    if isinstance(validation_str, dict):
+                        validation_dict = validation_str
+                    elif isinstance(validation_str, str) and validation_str.startswith('{'):
+                        # The validation string contains Python object reprs, we need to extract numeric values
+                        # Use regex to extract key metrics from the string
+                        import re
+                        # Extract factor names and their metrics
+                        for factor_name in [f.get('name') for f in factors_list if isinstance(f, dict)]:
+                            if not factor_name:
+                                continue
+                            
+                            # Initialize dict for this factor
+                            if factor_name not in validation_dict:
+                                validation_dict[factor_name] = {'regression': {}}
+                            
+                            # Directly search for sharpe_ratio, ic_mean, t_stat after the factor name
+                            # Pattern: 'FactorName': {... sharpe_ratio=value ...}
+                            try:
+                                factor_section_pattern = f\"'{factor_name}':.*?(?='[A-Z]|$)\"
+                                factor_section = re.search(factor_section_pattern, validation_str, re.DOTALL)
+                                
+                                if factor_section:
+                                    section = factor_section.group(0)
+                                    # Extract sharpe_ratio
+                                    sharpe_match = re.search(r'sharpe_ratio=([0-9.e+-]+)', section)
+                                    if sharpe_match:
+                                        try:
+                                            validation_dict[factor_name]['regression']['sharpe_ratio'] = float(sharpe_match.group(1))
+                                        except (ValueError, KeyError):
+                                            pass
+                                    
+                                    # Extract ic_mean
+                                    ic_match = re.search(r'ic_mean=([0-9.e+-]+)', section)
+                                    if ic_match:
+                                        try:
+                                            validation_dict[factor_name]['regression']['ic_mean'] = float(ic_match.group(1))
+                                        except (ValueError, KeyError):
+                                            pass
+                                    
+                                    # Extract t_stat
+                                    t_stat_match = re.search(r't_stat=([0-9.e+-]+)', section)
+                                    if t_stat_match:
+                                        try:
+                                            validation_dict[factor_name]['regression']['t_stat'] = float(t_stat_match.group(1))
+                                        except (ValueError, KeyError):
+                                            pass
+                                    
+                                    # Extract long_short_return
+                                    ls_return_match = re.search(r'long_short_return=([0-9.e+-]+)', section)
+                                    if ls_return_match:
+                                        try:
+                                            if 'long_short' not in validation_dict[factor_name]:
+                                                validation_dict[factor_name]['long_short'] = {}
+                                            validation_dict[factor_name]['long_short']['long_short_return'] = float(ls_return_match.group(1))
+                                        except (ValueError, KeyError):
+                                            pass
+                            except Exception as parse_err:
+                                # Skip this factor if parsing fails
+                                pass
+                except Exception as e:
+                    pass
+                
+                top_factors = []
+
+                for f_dict in factors_list:
+                    if not isinstance(f_dict, dict):
+                        continue
+                    # Try common naming patterns for factor id/name
+                    name = f_dict.get('name') or f_dict.get('id') or f_dict.get('factor_name') or 'unknown_factor'
+                    
+                    # Extract score from validation results
+                    score = None
+                    score_details = {}
+                    
+                    if name in validation_dict:
+                        try:
+                            val_result = validation_dict[name]
+                            if isinstance(val_result, dict):
+                                # Try to extract from regression results
+                                reg = val_result.get('regression')
+                                if reg:
+                                    # Try to get attributes from RegressionResult object
+                                    if hasattr(reg, 'sharpe_ratio'):
+                                        score = reg.sharpe_ratio
+                                        score_details['sharpe_ratio'] = reg.sharpe_ratio
+                                    elif hasattr(reg, 'ic_mean'):
+                                        score = reg.ic_mean
+                                        score_details['ic_mean'] = reg.ic_mean
+                                    elif hasattr(reg, 't_stat'):
+                                        score = abs(reg.t_stat)
+                                        score_details['t_stat'] = reg.t_stat
+                                    
+                                    # Also try to extract from dict representation
+                                    if score is None and isinstance(reg, dict):
+                                        score = reg.get('sharpe_ratio')
+                                        if score is None:
+                                            score = reg.get('ic_mean')
+                                        if score is None and reg.get('t_stat') is not None:
+                                            score = abs(reg.get('t_stat'))
+                                        
+                                        if reg.get('sharpe_ratio') is not None:
+                                            score_details['sharpe_ratio'] = reg['sharpe_ratio']
+                                        if reg.get('ic_mean') is not None:
+                                            score_details['ic_mean'] = reg['ic_mean']
+                                        if reg.get('t_stat') is not None:
+                                            score_details['t_stat'] = reg['t_stat']
+                                
+                                # Also check long_short results
+                                ls = val_result.get('long_short')
+                                if ls and score is None:
+                                    if hasattr(ls, 'long_short_return'):
+                                        score = abs(ls.long_short_return)
+                                        score_details['long_short_return'] = ls.long_short_return
+                                    elif isinstance(ls, dict):
+                                        score = abs(ls.get('long_short_return', 0))
+                                        if ls.get('long_short_return'):
+                                            score_details['long_short_return'] = ls['long_short_return']
+                        except (KeyError, AttributeError, TypeError) as e:
+                            # Skip this factor if accessing validation_dict fails
+                            pass
+                    
+                    # Fallback: try to find score in factor dict itself
+                    if score is None:
+                        for key in ['ic', 'information_coefficient', 't_value', 't_stat', 'sharpe', 'score']:
+                            if key in f_dict:
+                                score = f_dict[key]
+                                score_details[key] = score
+                                break
+                    
+                    top_factors.append({
+                        'name': name,
+                        'score': score,
+                        'score_details': score_details if score_details else None,
+                        'category': f_dict.get('category', 'unknown'),
+                        'expected_target': f_dict.get('expected_target', 'unknown'),
+                        'raw': f_dict
+                    })
+
+                # Sort by score when available, keep top 20
+                def _score_key(item):
+                    s = item.get('score')
+                    # Put scored factors first, then by score descending
+                    if s is None:
+                        return (False, 0.0)
+                    try:
+                        return (True, float(s))
+                    except (ValueError, TypeError):
+                        return (False, 0.0)
+
+                top_factors_sorted = sorted(top_factors, key=_score_key, reverse=True)[:20]
+
+                factor_attribution = {
+                    'top_factors': top_factors_sorted,
+                    'n_factors_total': len(top_factors),
+                    'summary': {
+                        'top_factor': top_factors_sorted[0]['name'] if top_factors_sorted and top_factors_sorted[0].get('score') is not None else None,
+                        'factors_with_scores': sum(1 for f in top_factors if f.get('score') is not None),
+                    },
+                    'timestamp': datetime.now().isoformat()
+                }
+
+                fa_file = f'{RESEARCH_OUTPUT}/factor_attribution_{timestamp}.json'
+                with open(fa_file, 'w') as f:
+                    json.dump(factor_attribution, f, indent=2, default=str)
+                print(f'✓ Factor attribution summary exported to {fa_file}')
+                
+                # Print summary
+                if top_factors_sorted and top_factors_sorted[0].get('score') is not None:
+                    top = top_factors_sorted[0]
+                    print(f'  Top factor: {top["name"]} (score: {top["score"]:.4f})')
+            except Exception as e:
+                print(f'  ⚠️  Could not generate factor attribution summary: {e}')
+                import traceback
+                traceback.print_exc()
         else:
             print('  ⚠️  No market data available for research')
     except ImportError as e:
@@ -1618,17 +2031,144 @@ result = flow.execute_complete_flow_with_position_management(
     force_slippage_impl=force_slippage_impl
 )
 
+# Ensure results directory exists and save results
+import os
+import json
+from datetime import datetime
+results_dir = os.environ.get('RESULTS_DIR', './results')
+os.makedirs(results_dir, exist_ok=True)
+os.makedirs(f'{results_dir}/strategies', exist_ok=True)
+os.makedirs(f'{results_dir}/research', exist_ok=True)
+os.makedirs(f'{results_dir}/backtest', exist_ok=True)
+os.makedirs(f'{results_dir}/performance', exist_ok=True)
+os.makedirs(f'{results_dir}/hft_metrics', exist_ok=True)
+
+# Save complete results
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+result_file = f'{results_dir}/performance/complete_flow_{timestamp}.json'
+with open(result_file, 'w') as f:
+    json.dump(result, f, indent=2, default=str)
+print(f'\\n✓ Complete flow results saved to: {result_file}')
+
+# Save strategy comparison results separately
+if 'strategy_results' in result:
+    strategy_file = f'{results_dir}/strategies/strategy_comparison_{timestamp}.json'
+    strategy_data = {
+        'strategies_tested': result.get('strategies_tested', []),
+        'strategy_results': {k: {
+            'total_return': v.get('total_return', 0) if isinstance(v, dict) else 0,
+            'error': v.get('error', None) if isinstance(v, dict) and 'error' in v else None
+        } for k, v in result.get('strategy_results', {}).items()},
+        'risk_results': result.get('risk_results', {}),
+        'best_strategy': result.get('best_strategy', None),
+        'timestamp': result.get('timestamp', datetime.now().isoformat())
+    }
+    with open(strategy_file, 'w') as f:
+        json.dump(strategy_data, f, indent=2, default=str)
+    print(f'✓ Strategy comparison saved to: {strategy_file}')
+
+# Save backtest results separately
+if 'strategy_results' in result and 'risk_results' in result:
+    backtest_file = f'{results_dir}/backtest/backtest_results_{timestamp}.json'
+    backtest_data = {
+        'data_info': result.get('data_info', {}),
+        'strategies': result.get('strategies_tested', []),
+        'backtest_results': {
+            name: {
+                'total_return': result['strategy_results'][name].get('total_return', 0) if name in result['strategy_results'] and isinstance(result['strategy_results'][name], dict) else 0,
+                'risk_metrics': result['risk_results'].get(name, {}) if name in result['risk_results'] else {}
+            }
+            for name in result.get('strategies_tested', [])
+            if name in result.get('strategy_results', {})
+        },
+        'best_strategy': result.get('best_strategy', None),
+        'timestamp': result.get('timestamp', datetime.now().isoformat())
+    }
+    with open(backtest_file, 'w') as f:
+        json.dump(backtest_data, f, indent=2, default=str)
+    print(f'✓ Backtest results saved to: {backtest_file}')
+
+# Save HFT metrics separately
+if 'hft_metrics' in result and result['hft_metrics']:
+    hft_file = f'{results_dir}/hft_metrics/hft_metrics_{timestamp}.json'
+    with open(hft_file, 'w') as f:
+        json.dump(result['hft_metrics'], f, indent=2, default=str)
+    print(f'✓ HFT metrics saved to: {hft_file}')
+    
+    # Generate HFT reports (import hft_metrics directly to avoid Evaluation/__init__ dependencies)
+    try:
+        import importlib.util
+        from pathlib import Path as _Path
+        hft_metrics_path = _Path('Evaluation') / 'hft_metrics.py'
+        if hft_metrics_path.exists():
+            spec = importlib.util.spec_from_file_location('hft_metrics', str(hft_metrics_path))
+            hft_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(hft_mod)
+            HFTEvaluator = getattr(hft_mod, 'HFTEvaluator', None)
+            HFTMetrics = getattr(hft_mod, 'HFTMetrics', None)
+        else:
+            HFTEvaluator = None
+            HFTMetrics = None
+
+        if HFTEvaluator is not None and HFTMetrics is not None:
+            for strategy_name, metrics_dict in result['hft_metrics'].items():
+                if not isinstance(metrics_dict, dict):
+                    continue
+
+                evaluator = HFTEvaluator()
+                m = HFTMetrics()
+
+                # Map persisted dict keys back to HFTMetrics fields
+                m.hit_ratio = float(metrics_dict.get('hit_ratio', 0.0))
+                m.latency_jitter = float(metrics_dict.get('latency_jitter_ms', 0.0))
+                m.cancel_to_trade_ratio = float(metrics_dict.get('cancel_to_trade_ratio', 0.0))
+                m.order_book_imbalance_importance = float(metrics_dict.get('order_book_imbalance_importance', 0.0))
+                m.alpha_decay_ms = float(metrics_dict.get('alpha_decay_ms', 0.0))
+                m.slippage_bps = float(metrics_dict.get('slippage_bps', 0.0))
+                m.throughput_tps = float(metrics_dict.get('throughput_tps', 0.0))
+
+                m.total_signals = int(metrics_dict.get('total_signals', 0) or 0)
+                m.correct_signals = int(metrics_dict.get('correct_signals', 0) or 0)
+                m.total_trades = int(metrics_dict.get('total_trades', 0) or 0)
+                m.total_cancels = int(metrics_dict.get('total_cancels', 0) or 0)
+                # We don't have raw latency/slippage samples in the JSON; lists stay empty.
+                
+                evaluator.metrics = m
+                report = evaluator.generate_report(strategy_name)
+                report_file = f'{results_dir}/hft_metrics/report_{strategy_name}_{timestamp}.txt'
+                with open(report_file, 'w') as f:
+                    f.write(report)
+                print(f'✓ HFT report for {strategy_name} saved to: {report_file}')
+        else:
+            print('⚠️  HFTEvaluator/HFTMetrics not available, skipping HFT reports generation')
+    except Exception as e:
+        print(f'⚠️  Could not generate HFT reports: {e}')
+
 print('\\nComplete flow finished successfully!')
-print('\\nAll reports saved to results/ directory')
+print(f'\\nAll reports saved to: {os.path.abspath(results_dir)}')
+print(f'  - Strategies: {results_dir}/strategies/')
+print(f'  - Research: {results_dir}/research/')
+print(f'  - Backtest: {results_dir}/backtest/')
+print(f'  - Performance: {results_dir}/performance/')
+print(f'  - HFT Metrics: {results_dir}/hft_metrics/')
 " 2>&1 | tee "$LOGFILE"
         else
             python3 -c "
 import sys
 sys.path.insert(0, '.')
-from Execution.engine.integrated_trading_flow import IntegratedTradingFlow
-from Execution.risk_control.portfolio_manager import RiskModel
-from Execution.engine.complete_trading_flow import create_sample_strategies
-from Execution.engine.pipeline import create_sample_data
+from Execution.engine.integrated_trading_flow import IntegratedTradingFlow, create_sample_strategies, create_sample_data
+try:
+    from Risk_Control.portfolio_manager import RiskModel
+except ImportError:
+    # Fallback if RiskModel not available
+    from enum import Enum
+    class RiskModel(Enum):
+        EQUAL_WEIGHT = "equal_weight"
+        INVERSE_VOLATILITY = "inverse_volatility"
+        MEAN_VARIANCE = "mean_variance"
+        RISK_PARITY = "risk_parity"
+        BLACK_LITTERMAN = "black_litterman"
+        HIERARCHICAL_RISK_PARITY = "hrp"
 force_slippage_impl = '${SLIPPAGE_IMPL}'
 force_slippage_impl = force_slippage_impl if force_slippage_impl else None
 
@@ -1640,7 +2180,7 @@ if ENABLE_QDB:
     try:
         if QDB_OPTIMIZED:
             try:
-                from Data.qdb.improved_optimized_indexer import ImprovedOptimizedIndexer
+                from QDB.improved_optimized_indexer import ImprovedOptimizedIndexer
                 indexer = ImprovedOptimizedIndexer(base_path=QDB_PATH)
                 class OptimizedQDBWrapper:
                     def __init__(self, indexer):
@@ -1653,10 +2193,10 @@ if ENABLE_QDB:
                         return self.indexer.load_parallel(symbol, start_time, end_time)
                 qdb = OptimizedQDBWrapper(indexer)
             except ImportError:
-                from Data.qdb import create_qdb
+                from QDB import create_qdb
                 qdb = create_qdb(base_path=QDB_PATH)
         else:
-            from Data.qdb import create_qdb
+            from QDB import create_qdb
             qdb = create_qdb(base_path=QDB_PATH)
     except:
         ENABLE_QDB = False
@@ -1693,8 +2233,112 @@ result = flow.execute_complete_flow_with_position_management(
     force_slippage_impl=force_slippage_impl
 )
 
+# Ensure results directory exists and save results
+import os
+import json
+from datetime import datetime
+results_dir = os.environ.get('RESULTS_DIR', './results')
+os.makedirs(results_dir, exist_ok=True)
+os.makedirs(f'{results_dir}/strategies', exist_ok=True)
+os.makedirs(f'{results_dir}/research', exist_ok=True)
+os.makedirs(f'{results_dir}/backtest', exist_ok=True)
+os.makedirs(f'{results_dir}/performance', exist_ok=True)
+os.makedirs(f'{results_dir}/hft_metrics', exist_ok=True)
+
+# Save complete results
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+result_file = f'{results_dir}/performance/complete_flow_{timestamp}.json'
+with open(result_file, 'w') as f:
+    json.dump(result, f, indent=2, default=str)
+print(f'\\n✓ Complete flow results saved to: {result_file}')
+
+# Save strategy comparison results separately
+if 'strategy_results' in result:
+    strategy_file = f'{results_dir}/strategies/strategy_comparison_{timestamp}.json'
+    strategy_data = {
+        'strategies_tested': result.get('strategies_tested', []),
+        'strategy_results': {k: {
+            'total_return': v.get('total_return', 0) if isinstance(v, dict) else 0,
+            'error': v.get('error', None) if isinstance(v, dict) and 'error' in v else None
+        } for k, v in result.get('strategy_results', {}).items()},
+        'risk_results': result.get('risk_results', {}),
+        'best_strategy': result.get('best_strategy', None),
+        'timestamp': result.get('timestamp', datetime.now().isoformat())
+    }
+    with open(strategy_file, 'w') as f:
+        json.dump(strategy_data, f, indent=2, default=str)
+    print(f'✓ Strategy comparison saved to: {strategy_file}')
+
+# Save backtest results separately
+if 'strategy_results' in result and 'risk_results' in result:
+    backtest_file = f'{results_dir}/backtest/backtest_results_{timestamp}.json'
+    backtest_data = {
+        'data_info': result.get('data_info', {}),
+        'strategies': result.get('strategies_tested', []),
+        'backtest_results': {
+            name: {
+                'total_return': result['strategy_results'][name].get('total_return', 0) if name in result['strategy_results'] and isinstance(result['strategy_results'][name], dict) else 0,
+                'risk_metrics': result['risk_results'].get(name, {}) if name in result['risk_results'] else {}
+            }
+            for name in result.get('strategies_tested', [])
+            if name in result.get('strategy_results', {})
+        },
+        'best_strategy': result.get('best_strategy', None),
+        'timestamp': result.get('timestamp', datetime.now().isoformat())
+    }
+    with open(backtest_file, 'w') as f:
+        json.dump(backtest_data, f, indent=2, default=str)
+    print(f'✓ Backtest results saved to: {backtest_file}')
+
+# Save HFT metrics separately
+if 'hft_metrics' in result and result['hft_metrics']:
+    hft_file = f'{results_dir}/hft_metrics/hft_metrics_{timestamp}.json'
+    with open(hft_file, 'w') as f:
+        json.dump(result['hft_metrics'], f, indent=2, default=str)
+    print(f'✓ HFT metrics saved to: {hft_file}')
+    
+    # Generate HFT reports (import hft_metrics directly to avoid Evaluation/__init__ dependencies)
+    try:
+        import importlib.util
+        from pathlib import Path as _Path
+        hft_metrics_path = _Path('Evaluation') / 'hft_metrics.py'
+        if hft_metrics_path.exists():
+            spec = importlib.util.spec_from_file_location('hft_metrics', str(hft_metrics_path))
+            hft_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(hft_mod)
+            HFTEvaluator = hft_mod.HFTEvaluator
+        else:
+            HFTEvaluator = None
+
+        if HFTEvaluator is not None:
+            for strategy_name, metrics_dict in result['hft_metrics'].items():
+                if isinstance(metrics_dict, dict):
+                    evaluator = HFTEvaluator()
+                    # Create a simple object with the metrics
+                    class MetricsObj:
+                        def __init__(self, d):
+                            for k, v in d.items():
+                                setattr(self, k, v)
+                        def to_dict(self):
+                            return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+                    evaluator.metrics = MetricsObj(metrics_dict)
+                    report = evaluator.generate_report(strategy_name)
+                    report_file = f'{results_dir}/hft_metrics/report_{strategy_name}_{timestamp}.txt'
+                    with open(report_file, 'w') as f:
+                        f.write(report)
+                    print(f'✓ HFT report for {strategy_name} saved to: {report_file}')
+        else:
+            print('⚠️  HFTEvaluator not available, skipping HFT reports generation')
+    except Exception as e:
+        print(f'⚠️  Could not generate HFT reports: {e}')
+
 print('\\nComplete flow finished successfully!')
-print('\\nAll reports saved to results/ directory')
+print(f'\\nAll reports saved to: {os.path.abspath(results_dir)}')
+print(f'  - Strategies: {results_dir}/strategies/')
+print(f'  - Research: {results_dir}/research/')
+print(f'  - Backtest: {results_dir}/backtest/')
+print(f'  - Performance: {results_dir}/performance/')
+print(f'  - HFT Metrics: {results_dir}/hft_metrics/')
 "
         fi
         ;;

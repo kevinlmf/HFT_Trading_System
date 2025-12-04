@@ -460,7 +460,7 @@ class RealTimeTradingEngine:
                 logger.info(f"🎯 Strategy selected for {symbol}: {strategy_name} (confidence: {confidence:.3f})")
 
             # Lower threshold for initial trades (allow 0.2 instead of 0.25)
-            if confidence < 0.1:  # Lowered from 0.25 to 0.2
+            if confidence < 0.2:  # Lowered from 0.25 to 0.2
                 # Too low confidence, skip
                 if self.signal_count % 10 == 0:
                     logger.debug(f"⏸️  Skipping signal generation for {symbol}: confidence {confidence:.3f} < 0.2")
@@ -585,16 +585,16 @@ class RealTimeTradingEngine:
                                    f"strength={strength:.3f}, confidence={confidence:.3f}")
                     
                     # Only generate signal if confidence is reasonable (lowered threshold for more signals)
-                    if confidence < 0.15:  # Lowered from 0.3 to 0.25
+                    if confidence < 0.25:  # Lowered from 0.3 to 0.25
                         if self.signal_count % 5 == 0:
                             logger.debug(f"Signal rejected: confidence {confidence:.3f} < 0.25")
                         return 0
                     
                     # Lowered strength threshold from 0.1 to 0.05 to allow more signals
-                    if action == 'BUY' and strength > 0.01:
+                    if action == 'BUY' and strength > 0.05:
                         logger.info(f"✓ BUY signal for {symbol}: strength={strength:.3f}, confidence={confidence:.3f}")
                         return 1
-                    elif action == 'SELL' and strength > 0.01:
+                    elif action == 'SELL' and strength > 0.05:
                         logger.info(f"✓ SELL signal for {symbol}: strength={strength:.3f}, confidence={confidence:.3f}")
                         return -1
                     else:

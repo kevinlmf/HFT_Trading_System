@@ -21,10 +21,10 @@ Usage:
 """
 
 from .trading_engine import RealTimeTradingEngine
-from Data.connectors.base_connector import BaseConnector, MarketTick, OrderBookSnapshot
-from Data.connectors.alpaca_connector import AlpacaConnector
+from Market_Data.base_connector import BaseConnector, MarketTick, OrderBookSnapshot
+from Market_Data.alpaca_connector import AlpacaConnector
 from .strategy_router.adaptive_router import AdaptiveStrategyRouter, MarketRegime
-from Monitoring.pnl_tracking.realtime_pnl import RealTimePnLTracker, Position, Trade
+from Monitoring.realtime_pnl import RealTimePnLTracker, Position, Trade
 
 __all__ = [
     'RealTimeTradingEngine',

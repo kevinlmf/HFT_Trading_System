@@ -11,7 +11,18 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from Data.eda.data_analyzer import DataProfile, DataQuality
+# DataProfile and DataQuality - using simplified versions if not available
+try:
+    from Data.eda.data_analyzer import DataProfile, DataQuality
+except ImportError:
+    # Fallback: create simple placeholder classes
+    from typing import Optional
+    class DataProfile:
+        def __init__(self, *args, **kwargs):
+            pass
+    class DataQuality:
+        def __init__(self, *args, **kwargs):
+            pass
 
 # 尝试导入C++模块
 cpp_core_dir = Path(__file__).resolve().parent.parent / "cpp_core"
@@ -24,13 +35,8 @@ try:
 except ImportError:
     CPP_AVAILABLE = False
 
-# 尝试导入CUDA模块
-try:
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "cuda_accelerated" / "python"))
-    from cuda_slippage import CUDASlippageCalculator
-    CUDA_AVAILABLE = True
-except ImportError:
-    CUDA_AVAILABLE = False
+# CUDA support removed - using C++ and Python implementations only
+CUDA_AVAILABLE = False
 
 
 class SmartExecutor:
@@ -40,7 +46,6 @@ class SmartExecutor:
     根据数据特征自动选择最优实现方式：
     - Python向量化：小规模数据，快速开发
     - C++：中等大规模数据，高性能
-    - CUDA：超大规模数据，GPU加速
     """
     
     def __init__(self):
@@ -48,7 +53,6 @@ class SmartExecutor:
         self.stats = {
             'python_calls': 0,
             'cpp_calls': 0,
-            'cuda_calls': 0,
             'total_orders': 0
         }
     
@@ -78,8 +82,11 @@ class SmartExecutor:
         
         # 如果没有提供profile，进行快速分析
         if profile is None:
-            from Data.eda.data_analyzer import DataAnalyzer
-            analyzer = DataAnalyzer()
+            try:
+                from Data.eda.data_analyzer import DataAnalyzer
+                analyzer = DataAnalyzer()
+            except ImportError:
+                analyzer = None
             # 创建临时DataFrame进行分析
             temp_df = pd.DataFrame({
                 'price': prices,
@@ -119,19 +126,16 @@ class SmartExecutor:
                 result = self._execute_cpp(prices, quantities, mid_prices, sides)
                 self.stats['cpp_calls'] += 1
         elif impl == "cuda":
-            if not CUDA_AVAILABLE:
-                print("Warning: CUDA not available, falling back to C++ or Python")
-                if CPP_AVAILABLE:
-                    result = self._execute_cpp(prices, quantities, mid_prices, sides)
-                    execution_info['implementation'] = 'cpp'
-                    self.stats['cpp_calls'] += 1
-                else:
-                    result = self._execute_python(prices, quantities, mid_prices, sides)
-                    execution_info['implementation'] = 'python_vectorized'
-                    self.stats['python_calls'] += 1
+            # CUDA support removed - fallback to C++ or Python
+            print("Warning: CUDA not available, falling back to C++ or Python")
+            if CPP_AVAILABLE:
+                result = self._execute_cpp(prices, quantities, mid_prices, sides)
+                execution_info['implementation'] = 'cpp'
+                self.stats['cpp_calls'] += 1
             else:
-                result = self._execute_cuda(prices, quantities, mid_prices, sides)
-                self.stats['cuda_calls'] += 1
+                result = self._execute_python(prices, quantities, mid_prices, sides)
+                execution_info['implementation'] = 'python_vectorized'
+                self.stats['python_calls'] += 1
         else:
             # 默认使用Python
             result = self._execute_python(prices, quantities, mid_prices, sides)
@@ -183,35 +187,18 @@ class SmartExecutor:
         
         return np.array(slippage_costs)
     
-    def _execute_cuda(self, prices, quantities, mid_prices, sides):
-        """CUDA实现"""
-        calculator = CUDASlippageCalculator(
-            base_slippage_bps=1.0,
-            volatility=1.0,
-            liquidity_factor=1.0,
-            size_threshold=100000.0
-        )
-        return calculator.calculate_batch(prices, quantities, mid_prices, sides)
-    
     def get_stats(self) -> Dict:
         """获取执行统计信息"""
         return {
             **self.stats,
             'python_ratio': self.stats['python_calls'] / max(sum([
                 self.stats['python_calls'],
-                self.stats['cpp_calls'],
-                self.stats['cuda_calls']
+                self.stats['cpp_calls']
             ]), 1),
             'cpp_ratio': self.stats['cpp_calls'] / max(sum([
                 self.stats['python_calls'],
-                self.stats['cpp_calls'],
-                self.stats['cuda_calls']
+                self.stats['cpp_calls']
             ]), 1),
-            'cuda_ratio': self.stats['cuda_calls'] / max(sum([
-                self.stats['python_calls'],
-                self.stats['cpp_calls'],
-                self.stats['cuda_calls']
-            ]), 1)
         }
     
     def reset_stats(self):
@@ -219,7 +206,6 @@ class SmartExecutor:
         self.stats = {
             'python_calls': 0,
             'cpp_calls': 0,
-            'cuda_calls': 0,
             'total_orders': 0
         }
 

@@ -16,19 +16,32 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import warnings
+import warnings
 warnings.filterwarnings('ignore')
+
+# CVXPY Integration
+try:
+    from Optimization.cvxpy_optimizer import CVXPYOptimizer, CVXPY_AVAILABLE
+except ImportError:
+    CVXPY_AVAILABLE = False
+    CVXPYOptimizer = None
+
+# JAX Integration
+try:
+    from Optimization.jax_optimizer import JAXOptimizer, JAX_AVAILABLE
+except ImportError:
+    JAX_AVAILABLE = False
+    JAXOptimizer = None
+
+
 
 
 # ========== 统计理论层 ==========
 
-class ModelObjective(Enum):
-    """模型目标类型"""
-    MAXIMIZE_SHARPE = "maximize_sharpe"
-    MINIMIZE_VARIANCE = "minimize_variance"
-    MAXIMIZE_RETURN = "maximize_return"
-    MINIMIZE_CVAR = "minimize_cvar"
-    MAXIMIZE_UTILITY = "maximize_utility"
-    MINIMIZE_TRACKING_ERROR = "minimize_tracking_error"
+from Optimization.optimization_types import ModelObjective, AlgorithmType, AlgorithmConfig
+
+# ========== 统计理论层 ==========
+
 
 
 @dataclass
@@ -198,31 +211,10 @@ class ModelExpressionLayer:
 
 # ========== 算法设计层 ==========
 
-class AlgorithmType(Enum):
-    """算法类型"""
-    GRADIENT_DESCENT = "gradient_descent"
-    NEWTON_METHOD = "newton_method"
-    QUASI_NEWTON = "quasi_newton"
-    STOCHASTIC_GRADIENT = "stochastic_gradient"
-    ADAM = "adam"
-    LBFGS = "lbfgs"
-    SIMULATED_ANNEALING = "simulated_annealing"
-    GENETIC_ALGORITHM = "genetic_algorithm"
-    MCMC = "mcmc"
-    VARIATIONAL_INFERENCE = "variational_inference"
 
 
-@dataclass
-class AlgorithmConfig:
-    """算法配置"""
-    algorithm_type: AlgorithmType
-    max_iterations: int = 1000
-    tolerance: float = 1e-6
-    learning_rate: float = 0.01
-    batch_size: Optional[int] = None
-    parallel: bool = True
-    gpu: bool = False
-    parameters: Dict[str, Any] = None
+
+
 
 
 class AlgorithmDesignLayer:
@@ -667,6 +659,94 @@ class OptimizationStack:
             objective=objective,
             constraints=constraints or {}
         )
+
+        # -1. 尝试使用JAX优化器 (最高优先级，特别是对于大规模问题或因子模型)
+        # 检查是否提供了因子模型参数
+        factor_loadings = constraints.get('factor_loadings') if constraints else None
+        factor_cov = constraints.get('factor_cov') if constraints else None
+        idio_risk = constraints.get('idiosyncratic_risk') if constraints else None
+        
+        use_jax = JAX_AVAILABLE and (
+            (factor_loadings is not None) or # 显式要求因子模型
+            (n_assets > 500) or              # 大规模问题
+            (objective == ModelObjective.MAXIMIZE_SHARPE and not constraints) # 无约束解析解
+        )
+        
+        if use_jax:
+            try:
+                jax_optimizer = JAXOptimizer(use_gpu=True)
+                
+                # 准备参数
+                mean_returns = returns.mean(axis=0)
+                if factor_loadings is None:
+                    cov_matrix = np.cov(returns, rowvar=False)
+                else:
+                    cov_matrix = None
+                
+                result = jax_optimizer.optimize_portfolio(
+                    mean_returns=mean_returns,
+                    cov_matrix=cov_matrix,
+                    factor_loadings=factor_loadings,
+                    factor_cov=factor_cov,
+                    idiosyncratic_risk=idio_risk,
+                    objective=objective,
+                    constraints=constraints
+                )
+                
+                if result['success']:
+                    return {
+                        'optimal_weights': result['weights'],
+                        'signals': self.system_layer.generate_signal(result['weights']),
+                        'optimization_info': {
+                            'success': True,
+                            'algorithm': result['optimization_info']['algorithm'],
+                            'message': result['optimization_info']['message'],
+                            'device': result['optimization_info']['device']
+                        },
+                        'model': model,
+                        'algorithm': 'JAX'
+                    }
+            except Exception as e:
+                print(f"JAX optimization failed: {e}, falling back to CVXPY/SLSQP")
+
+        # 0. 尝试使用CVXPY优化器 (如果可用且适用)
+
+        if CVXPY_AVAILABLE and objective in [ModelObjective.MAXIMIZE_SHARPE, ModelObjective.MINIMIZE_VARIANCE, ModelObjective.MAXIMIZE_RETURN]:
+            try:
+                # 计算必要的统计量
+                mean_returns = returns.mean(axis=0)
+                cov_matrix = np.cov(returns, rowvar=False)
+                
+                # 创建优化器
+                cvx_optimizer = CVXPYOptimizer(solver='OSQP')
+                
+                # 执行优化
+                result = cvx_optimizer.optimize_portfolio(
+                    mean_returns=mean_returns,
+                    cov_matrix=cov_matrix,
+                    objective=objective,
+                    constraints=constraints
+                )
+                
+                if result['success']:
+                    optimal_weights = result['weights']
+                    signals = self.system_layer.generate_signal(optimal_weights)
+                    
+                    return {
+                        'optimal_weights': optimal_weights,
+                        'signals': signals,
+                        'optimization_info': {
+                            'success': True,
+                            'algorithm': 'CVXPY_' + result['solver_stats']['solver'],
+                            'message': 'Optimized using CVXPY'
+                        },
+                        'model': model,
+                        'algorithm': 'CVXPY'
+                    }
+            except Exception as e:
+                print(f"CVXPY optimization failed: {e}, falling back to SLSQP")
+                # Fallback to standard flow
+
         
         # 2. 模型表达层：定义风险函数
         if objective == ModelObjective.MAXIMIZE_SHARPE:

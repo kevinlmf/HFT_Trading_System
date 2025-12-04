@@ -19,10 +19,10 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from Data.connectors.alpaca_connector import AlpacaConnector
-from Data.connectors.base_connector import MarketTick
+from Market_Data.alpaca_connector import AlpacaConnector
+from Market_Data.base_connector import MarketTick
 from Execution.trading.strategy_router.adaptive_router import AdaptiveStrategyRouter
-from Monitoring.pnl_tracking.realtime_pnl import RealTimePnLTracker
+from Monitoring.realtime_pnl import RealTimePnLTracker
 
 # Simple mock strategies for demo
 class SimpleStrategy:

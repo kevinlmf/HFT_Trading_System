@@ -1,60 +1,31 @@
 """
-Thin wrapper to run the main slippage benchmark from `Monitoring/benchmark_slippage.py`.
-
-This file exists so that `./run_trading.sh benchmark-slippage` can call
-`Monitoring/benchmarks/benchmark_slippage.py` while the actual implementation
-and result-writing logic live in `Monitoring/benchmark_slippage.py`.
-"""
-
-from pathlib import Path
-import runpy
-import sys
-import os
-
-
-def main() -> None:
-    """
-    Import and execute the real benchmark script.
-    """
-    # Ensure project root is on sys.path
-    project_root = Path(__file__).resolve().parents[2]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-
-    # Delegate to the main benchmark module
-    script_path = project_root / "Monitoring" / "benchmark_slippage.py"
-    if not script_path.exists():
-        print(f"Error: underlying benchmark script not found at {script_path}")
-        raise SystemExit(1)
-
-    # Execute the script as __main__ so its main() runs
-    runpy.run_path(str(script_path), run_name="__main__")
-
-
-if __name__ == "__main__":
-    main()
-
-"""
 Slippage Performance Benchmark
 
-Compare Python loop, NumPy vectorised, C++, and CUDA implementations of the
+Compare Python loop, NumPy vectorised, and C++ implementations of the
 slippage calculation. Lower latency is critical for HFT execution, so we
 capture execution time, throughput, and speed-up across multiple batch sizes.
+
+Results are printed to stdout and also saved to `results/benchmarks/` as JSON
+and PNG plots when invoked via `./run_trading.sh benchmark-slippage`.
 """
+import json
+import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import time
-import sys
-import os
-from typing import Dict, List, Tuple
-import matplotlib.pyplot as plt
-from pathlib import Path
 
 # Add project root to PYTHONPATH
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Ensure in-place C++ builds can be imported without pip install
-cpp_core_dir = Path(__file__).parent.parent.parent / "Execution" / "cpp_core"
+cpp_core_dir = PROJECT_ROOT / "Execution" / "cpp_core"
 if cpp_core_dir.exists():
     if str(cpp_core_dir) not in sys.path:
         sys.path.insert(0, str(cpp_core_dir))
@@ -62,6 +33,7 @@ if cpp_core_dir.exists():
 # 尝试导入C++模块
 try:
     import cpp_trading2
+
     CPP_AVAILABLE = True
 except ImportError:
     CPP_AVAILABLE = False
@@ -70,8 +42,10 @@ except ImportError:
 # CUDA support removed - using C++ and Python implementations only
 CUDA_AVAILABLE = False
 
-# 导入Python实现
-from Environment.simulator.market_simulator import RealisticMarketSimulator, OrderSide, OrderType
+# Note: Older versions used `Environment.simulator.market_simulator` here.
+# The current benchmark only needs to generate synthetic price/size data and
+# does not depend on the Environment module, so we avoid importing it to keep
+# the benchmark self-contained and runnable out-of-the-box.
 
 
 class SlippageBenchmark:
@@ -497,6 +471,30 @@ class SlippageBenchmark:
             print(f"\nPlots saved to: {save_path}")
         else:
             plt.show()
+
+    def to_summary_dict(self) -> Dict:
+        """
+        Build a serializable summary of benchmark results and speedups.
+        """
+        if not self.results:
+            return {}
+
+        summary: Dict[str, Dict] = {
+            "n_orders": self.results.get("n_orders", []),
+            "python_loop": self.results.get("python_loop", {}),
+            "python_vectorized": self.results.get("python_vectorized", {}),
+            "cpp": self.results.get("cpp", {}),
+            "cuda": self.results.get("cuda", {}),
+            "speedup": self.calculate_speedup(),
+            "metadata": {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "cpp_available": CPP_AVAILABLE,
+                "cuda_available": CUDA_AVAILABLE,
+                "description": "Slippage performance benchmark: Python loop vs NumPy vs C++ (and CUDA if available).",
+            },
+        }
+
+        return summary
     
     def print_summary(self):
         """Print a summary of the latest benchmark run."""
@@ -591,13 +589,29 @@ def main():
     # Execute the benchmark
     benchmark.benchmark(n_orders_list, n_runs=5)
     
-    # Print summary
+    # Print summary to stdout
     benchmark.print_summary()
     
-    # Plot findings
-    output_dir = Path(__file__).parent
-    output_dir.mkdir(exist_ok=True)
-    plot_path = output_dir / "slippage_benchmark_results.png"
+    # Determine results directory (respect RESULTS_DIR if provided by run_trading.sh)
+    results_root = os.environ.get("RESULTS_DIR", str(PROJECT_ROOT / "results"))
+    results_root_path = Path(results_root)
+    benchmarks_dir = results_root_path / "benchmarks"
+    benchmarks_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save JSON summary
+    summary = benchmark.to_summary_dict()
+    if summary:
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        json_path = benchmarks_dir / f"slippage_benchmark_{ts}.json"
+        try:
+            with json_path.open("w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2)
+            print(f"\nJSON summary saved to: {json_path}")
+        except Exception as exc:
+            print(f"Warning: failed to write benchmark JSON: {exc}")
+    
+    # Plot findings (saved alongside JSON in benchmarks directory)
+    plot_path = benchmarks_dir / f"slippage_benchmark_{ts}.png"
     benchmark.plot_results(save_path=str(plot_path))
     
     print("\nBenchmark complete!")
