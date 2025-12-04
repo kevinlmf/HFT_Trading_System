@@ -1,0 +1,68 @@
+{
+  "profiling": {
+    "price_formation": {
+      "midprice_drift": 0.0008557294168735338,
+      "volatility_clustering": 0.3456869587706124,
+      "autocorrelation_1lag": 0.03792691624447879,
+      "autocorrelation_5lag": -0.10123949476830482,
+      "price_jump_frequency": 0.01606425702811245,
+      "price_jump_magnitude": 0.0954445637316802
+    },
+    "liquidity_structure": {
+      "spread_mean": 0.01999999999998181,
+      "spread_std": 0.0,
+      "depth_imbalance": 0.0,
+      "depth_total": 2000.0,
+      "resiliency": 0.0,
+      "depth_volatility": 0.0
+    },
+    "order_flow_dynamics": {
+      "arrival_rate_buy": 125.0,
+      "arrival_rate_sell": 125.0,
+      "cancel_ratio": 0.3,
+      "fill_ratio": 0.7,
+      "order_size_mean": 100.0,
+      "order_size_std": 50.0
+    }
+  },
+  "factors": [
+    {
+      "name": "PriceAutocorrelation",
+      "category": "FactorCategory.MOMENTUM",
+      "economic_motivation": "\u4ef7\u683c\u6b63\u81ea\u76f8\u5173\u8868\u660e\u5b58\u5728\u77ed\u671f\u52a8\u91cf\u6548\u5e94\uff0c\u8fc7\u53bb\u6536\u76ca\u53ef\u4ee5\u9884\u6d4b\u672a\u6765\u6536\u76ca",
+      "formula": "PriceAutocorr = Autocorr(Returns, lag=1)",
+      "expected_direction": "\u6b63\u76f8\u5173\uff08\u5bf9\u672a\u6765\u6536\u76ca\uff09",
+      "expected_target": "return",
+      "microstructure_basis": "\u4ef7\u683c\u5f62\u6210\u673a\u5236 - \u81ea\u76f8\u5173\u6027\uff08\u7edf\u8ba1\u7279\u5f81\uff09"
+    },
+    {
+      "name": "VolatilityClustering",
+      "category": "FactorCategory.VOLATILITY",
+      "economic_motivation": "\u6ce2\u52a8\u7387\u805a\u96c6\u53cd\u6620\u5e02\u573a\u60c5\u7eea\u7684\u6301\u7eed\u6027\uff0c\u9ad8\u6ce2\u52a8\u540e\u5f80\u5f80\u8ddf\u968f\u9ad8\u6ce2\u52a8\uff0c\u4f4e\u6ce2\u52a8\u540e\u5f80\u5f80\u8ddf\u968f\u4f4e\u6ce2\u52a8",
+      "formula": "VolClustering = Autocorr(|Returns|, lag=1)",
+      "expected_direction": "\u6b63\u76f8\u5173\uff08\u5bf9\u672a\u6765\u6ce2\u52a8\u7387\uff09",
+      "expected_target": "volatility",
+      "microstructure_basis": "\u4ef7\u683c\u5f62\u6210\u673a\u5236 - \u6ce2\u52a8\u7387\u805a\u96c6\u6027"
+    },
+    {
+      "name": "Spread",
+      "category": "FactorCategory.LIQUIDITY",
+      "economic_motivation": "\u4e70\u5356\u4ef7\u5dee\u53cd\u6620\u5e02\u573a\u6d41\u52a8\u6027\uff0c\u4ef7\u5dee\u8d8a\u5927\uff0c\u6d41\u52a8\u6027\u8d8a\u5dee\uff0c\u4ea4\u6613\u6210\u672c\u8d8a\u9ad8",
+      "formula": "Spread = AskPrice - BidPrice",
+      "expected_direction": "\u6b63\u76f8\u5173\uff08\u5bf9volatility\u548c\u4ea4\u6613\u6210\u672c\uff09",
+      "expected_target": "volatility",
+      "microstructure_basis": "\u6d41\u52a8\u6027\u7ed3\u6784 - \u4e70\u5356\u4ef7\u5dee"
+    },
+    {
+      "name": "CancellationRate",
+      "category": "FactorCategory.VOLATILITY",
+      "economic_motivation": "\u9ad8\u64a4\u5355\u7387\u53cd\u6620\u5e02\u573a\u4e0d\u786e\u5b9a\u6027\u589e\u52a0\uff0c\u6d41\u52a8\u6027\u63d0\u4f9b\u8005\u9891\u7e41\u8c03\u6574\u62a5\u4ef7\uff0c\u5bfc\u81f4\u6ce2\u52a8\u6027\u4e0a\u5347",
+      "formula": "CancelRate = CanceledOrders / TotalOrders",
+      "expected_direction": "\u6b63\u76f8\u5173\uff08\u5bf9volatility\uff09",
+      "expected_target": "volatility",
+      "microstructure_basis": "\u8ba2\u5355\u6d41\u52a8\u6001 - \u64a4\u5355\u7387"
+    }
+  ],
+  "validation": "{'PriceAutocorrelation': {'regression': RegressionResult(alpha=-5.421010862427522e-19, beta=1.0000000000000007, beta_std=4.301330133108652e-17, t_stat=2.324862238084669e+16, p_value=0.0, r_squared=1.0, sharpe_ratio=0.6608200876540259, ic_mean=1.0, ic_std=3.11748978593333e-15, ic_ir=320770898596742.3), 'long_short': LongShortResult(long_return=0.02615484653508289, short_return=-0.025363501629038707, long_short_return=0.0515183481641216, sharpe_ratio=0.0, max_drawdown=0.0, win_rate=0.0, turnover=1.0), 'stability': StabilityResult(rolling_betas=Series([], dtype: object), rolling_sharpe=Series([], dtype: object), cross_sectional_correlation=0.0, time_consistency=0.0), 'is_valid': False, 'hypothesis': FactorHypothesis(name='PriceAutocorrelation', category=<FactorCategory.MOMENTUM: 'momentum'>, economic_motivation='\u4ef7\u683c\u6b63\u81ea\u76f8\u5173\u8868\u660e\u5b58\u5728\u77ed\u671f\u52a8\u91cf\u6548\u5e94\uff0c\u8fc7\u53bb\u6536\u76ca\u53ef\u4ee5\u9884\u6d4b\u672a\u6765\u6536\u76ca', formula='PriceAutocorr = Autocorr(Returns, lag=1)', expected_direction='\u6b63\u76f8\u5173\uff08\u5bf9\u672a\u6765\u6536\u76ca\uff09', expected_target='return', microstructure_basis='\u4ef7\u683c\u5f62\u6210\u673a\u5236 - \u81ea\u76f8\u5173\u6027\uff08\u7edf\u8ba1\u7279\u5f81\uff09')}, 'VolatilityClustering': {'regression': RegressionResult(alpha=-5.421010862427522e-19, beta=1.0000000000000007, beta_std=4.301330133108652e-17, t_stat=2.324862238084669e+16, p_value=0.0, r_squared=1.0, sharpe_ratio=0.6608200876540259, ic_mean=1.0, ic_std=3.11748978593333e-15, ic_ir=320770898596742.3), 'long_short': LongShortResult(long_return=0.02615484653508289, short_return=-0.025363501629038707, long_short_return=0.0515183481641216, sharpe_ratio=0.0, max_drawdown=0.0, win_rate=0.0, turnover=1.0), 'stability': StabilityResult(rolling_betas=Series([], dtype: object), rolling_sharpe=Series([], dtype: object), cross_sectional_correlation=0.0, time_consistency=0.0), 'is_valid': False, 'hypothesis': FactorHypothesis(name='VolatilityClustering', category=<FactorCategory.VOLATILITY: 'volatility'>, economic_motivation='\u6ce2\u52a8\u7387\u805a\u96c6\u53cd\u6620\u5e02\u573a\u60c5\u7eea\u7684\u6301\u7eed\u6027\uff0c\u9ad8\u6ce2\u52a8\u540e\u5f80\u5f80\u8ddf\u968f\u9ad8\u6ce2\u52a8\uff0c\u4f4e\u6ce2\u52a8\u540e\u5f80\u5f80\u8ddf\u968f\u4f4e\u6ce2\u52a8', formula='VolClustering = Autocorr(|Returns|, lag=1)', expected_direction='\u6b63\u76f8\u5173\uff08\u5bf9\u672a\u6765\u6ce2\u52a8\u7387\uff09', expected_target='volatility', microstructure_basis='\u4ef7\u683c\u5f62\u6210\u673a\u5236 - \u6ce2\u52a8\u7387\u805a\u96c6\u6027')}, 'Spread': {'regression': RegressionResult(alpha=-5.421010862427522e-19, beta=1.0000000000000007, beta_std=4.301330133108652e-17, t_stat=2.324862238084669e+16, p_value=0.0, r_squared=1.0, sharpe_ratio=0.6608200876540259, ic_mean=1.0, ic_std=3.11748978593333e-15, ic_ir=320770898596742.3), 'long_short': LongShortResult(long_return=0.02615484653508289, short_return=-0.025363501629038707, long_short_return=0.0515183481641216, sharpe_ratio=0.0, max_drawdown=0.0, win_rate=0.0, turnover=1.0), 'stability': StabilityResult(rolling_betas=Series([], dtype: object), rolling_sharpe=Series([], dtype: object), cross_sectional_correlation=0.0, time_consistency=0.0), 'is_valid': False, 'hypothesis': FactorHypothesis(name='Spread', category=<FactorCategory.LIQUIDITY: 'liquidity'>, economic_motivation='\u4e70\u5356\u4ef7\u5dee\u53cd\u6620\u5e02\u573a\u6d41\u52a8\u6027\uff0c\u4ef7\u5dee\u8d8a\u5927\uff0c\u6d41\u52a8\u6027\u8d8a\u5dee\uff0c\u4ea4\u6613\u6210\u672c\u8d8a\u9ad8', formula='Spread = AskPrice - BidPrice', expected_direction='\u6b63\u76f8\u5173\uff08\u5bf9volatility\u548c\u4ea4\u6613\u6210\u672c\uff09', expected_target='volatility', microstructure_basis='\u6d41\u52a8\u6027\u7ed3\u6784 - \u4e70\u5356\u4ef7\u5dee')}, 'CancellationRate': {'regression': RegressionResult(alpha=-5.421010862427522e-19, beta=1.0000000000000007, beta_std=4.301330133108652e-17, t_stat=2.324862238084669e+16, p_value=0.0, r_squared=1.0, sharpe_ratio=0.6608200876540259, ic_mean=1.0, ic_std=3.11748978593333e-15, ic_ir=320770898596742.3), 'long_short': LongShortResult(long_return=0.02615484653508289, short_return=-0.025363501629038707, long_short_return=0.0515183481641216, sharpe_ratio=0.0, max_drawdown=0.0, win_rate=0.0, turnover=1.0), 'stability': StabilityResult(rolling_betas=Series([], dtype: object), rolling_sharpe=Series([], dtype: object), cross_sectional_correlation=0.0, time_consistency=0.0), 'is_valid': False, 'hypothesis': FactorHypothesis(name='CancellationRate', category=<FactorCategory.VOLATILITY: 'volatility'>, economic_motivation='\u9ad8\u64a4\u5355\u7387\u53cd\u6620\u5e02\u573a\u4e0d\u786e\u5b9a\u6027\u589e\u52a0\uff0c\u6d41\u52a8\u6027\u63d0\u4f9b\u8005\u9891\u7e41\u8c03\u6574\u62a5\u4ef7\uff0c\u5bfc\u81f4\u6ce2\u52a8\u6027\u4e0a\u5347', formula='CancelRate = CanceledOrders / TotalOrders', expected_direction='\u6b63\u76f8\u5173\uff08\u5bf9volatility\uff09', expected_target='volatility', microstructure_basis='\u8ba2\u5355\u6d41\u52a8\u6001 - \u64a4\u5355\u7387')}}",
+  "timestamp": "2025-12-04T06:26:06.459045"
+}

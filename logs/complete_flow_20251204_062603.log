@@ -1,0 +1,194 @@
+INFO:QDB.indexer:Loaded index with 2 entries
+INFO:QDB.versioning:Loaded 2 versions
+INFO:QDB.qdb:QDB initialized at Data/datasets/qdb
+Traceback (most recent call last):
+  File "<string>", line 352, in <module>
+KeyError: 'CancellationRate'
+✓ QDB initialized for complete flow: ./Data/datasets/qdb
+  Data version: qdb_20251204
+  ✓ HFT Metrics evaluator enabled
+✓ Integrated Trading Flow initialized
+  Initial Capital: $100,000.00
+  Risk Model: risk_parity
+  Monte Carlo Paths: 100,000
+Using all available strategies for comprehensive comparison...
+
+================================================================================
+Running Research Framework (Complete Flow Mode)...
+================================================================================
+
+✓ Research results exported to ./results/research
+✓ Factor attribution summary exported to ./results/research/factor_attribution_20251204_062606.json
+  ⚠️  Could not generate factor attribution summary: 'CancellationRate'
+
+================================================================================
+Executing Complete Trading Flow with Position Management
+================================================================================
+
+[1/5] Preparing data...
+  ✓ Data prepared: 1000 records
+  ✓ Date range: 2025-10-23 15:26:04.627610 to 2025-12-04 06:26:04.627610
+
+[2/5] Preparing strategies...
+  ✓ Using default strategies: ['momentum', 'mean_reversion', 'ml_random_forest', 'ml_xgboost', 'rl_simple', 'llm_sentiment', 'llm_pattern']
+
+[3/5] Running strategy backtest and comparison...
+  - Testing strategy: momentum
+    ✓ Total Return: -22.08%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 48.27%
+      ✓ Latency Jitter: 1.15 ms
+      ✓ Alpha Decay: 8.00 ms
+      ✓ Slippage: 0.04 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: mean_reversion
+    ✓ Total Return: -3.23%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 50.89%
+      ✓ Latency Jitter: 1.15 ms
+      ✓ Alpha Decay: 9.00 ms
+      ✓ Slippage: -0.02 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: ml_random_forest
+    ✓ Total Return: 31.44%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 52.32%
+      ✓ Latency Jitter: 1.15 ms
+      ✓ Alpha Decay: 3.00 ms
+      ✓ Slippage: -0.02 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: ml_xgboost
+    ✓ Total Return: 48.60%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 53.66%
+      ✓ Latency Jitter: 1.16 ms
+      ✓ Alpha Decay: 3.00 ms
+      ✓ Slippage: -0.03 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: rl_simple
+    ✓ Total Return: 13.67%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 50.78%
+      ✓ Latency Jitter: 1.14 ms
+      ✓ Alpha Decay: 0.00 ms
+      ✓ Slippage: -0.03 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: llm_sentiment
+    ✓ Total Return: -16.41%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 49.03%
+      ✓ Latency Jitter: 1.19 ms
+      ✓ Alpha Decay: 5.00 ms
+      ✓ Slippage: 0.04 bps
+      ✓ Throughput: 1000.00 TPS
+  - Testing strategy: llm_pattern
+    ✓ Total Return: -22.26%
+    - Calculating HFT metrics...
+      ✓ Hit Ratio: 48.50%
+      ✓ Latency Jitter: 1.16 ms
+      ✓ Alpha Decay: 3.00 ms
+      ✓ Slippage: 0.02 bps
+      ✓ Throughput: 1000.00 TPS
+
+[4/5] Applying risk control...
+  - momentum: Sharpe=-0.59, Vol=12.62%
+  - mean_reversion: Sharpe=-0.29, Vol=8.50%
+  - ml_random_forest: Sharpe=0.42, Vol=14.09%
+  - ml_xgboost: Sharpe=0.66, Vol=13.43%
+  - rl_simple: Sharpe=0.16, Vol=13.21%
+  - llm_sentiment: Sharpe=-0.46, Vol=12.38%
+  - llm_pattern: Sharpe=-0.54, Vol=13.82%
+
+[5/5] Position management and execution...
+  ✓ Best strategy selected: ml_xgboost (Sharpe: 0.66)
+  ✓ Position management completed: 371 trades
+
+================================================================================
+Complete Flow Finished Successfully
+================================================================================
+
+Best Strategy: ml_xgboost
+  Sharpe Ratio: 0.66
+  Volatility: 13.43%
+  Max Drawdown: 12.97%
+
+================================================================================
+HFT Metrics Summary
+================================================================================
+
+momentum:
+  Hit Ratio: 48.27%
+  Latency Jitter: 1.15 ms
+  Cancel-to-Trade Ratio: 0.10
+  Alpha Decay: 8.00 ms
+  Slippage: 0.04 bps
+  Throughput: 1000.00 TPS
+
+mean_reversion:
+  Hit Ratio: 50.89%
+  Latency Jitter: 1.15 ms
+  Cancel-to-Trade Ratio: 0.12
+  Alpha Decay: 9.00 ms
+  Slippage: -0.02 bps
+  Throughput: 1000.00 TPS
+
+ml_random_forest:
+  Hit Ratio: 52.32%
+  Latency Jitter: 1.15 ms
+  Cancel-to-Trade Ratio: 0.12
+  Alpha Decay: 3.00 ms
+  Slippage: -0.02 bps
+  Throughput: 1000.00 TPS
+
+ml_xgboost:
+  Hit Ratio: 53.66%
+  Latency Jitter: 1.16 ms
+  Cancel-to-Trade Ratio: 0.09
+  Alpha Decay: 3.00 ms
+  Slippage: -0.03 bps
+  Throughput: 1000.00 TPS
+
+rl_simple:
+  Hit Ratio: 50.78%
+  Latency Jitter: 1.14 ms
+  Cancel-to-Trade Ratio: 0.09
+  Alpha Decay: 0.00 ms
+  Slippage: -0.03 bps
+  Throughput: 1000.00 TPS
+
+llm_sentiment:
+  Hit Ratio: 49.03%
+  Latency Jitter: 1.19 ms
+  Cancel-to-Trade Ratio: 0.09
+  Alpha Decay: 5.00 ms
+  Slippage: 0.04 bps
+  Throughput: 1000.00 TPS
+
+llm_pattern:
+  Hit Ratio: 48.50%
+  Latency Jitter: 1.16 ms
+  Cancel-to-Trade Ratio: 0.11
+  Alpha Decay: 3.00 ms
+  Slippage: 0.02 bps
+  Throughput: 1000.00 TPS
+
+✓ Complete flow results saved to: ./results/performance/complete_flow_20251204_062607.json
+✓ Strategy comparison saved to: ./results/strategies/strategy_comparison_20251204_062607.json
+✓ Backtest results saved to: ./results/backtest/backtest_results_20251204_062607.json
+✓ HFT metrics saved to: ./results/hft_metrics/hft_metrics_20251204_062607.json
+✓ HFT report for momentum saved to: ./results/hft_metrics/report_momentum_20251204_062607.txt
+✓ HFT report for mean_reversion saved to: ./results/hft_metrics/report_mean_reversion_20251204_062607.txt
+✓ HFT report for ml_random_forest saved to: ./results/hft_metrics/report_ml_random_forest_20251204_062607.txt
+✓ HFT report for ml_xgboost saved to: ./results/hft_metrics/report_ml_xgboost_20251204_062607.txt
+✓ HFT report for rl_simple saved to: ./results/hft_metrics/report_rl_simple_20251204_062607.txt
+✓ HFT report for llm_sentiment saved to: ./results/hft_metrics/report_llm_sentiment_20251204_062607.txt
+✓ HFT report for llm_pattern saved to: ./results/hft_metrics/report_llm_pattern_20251204_062607.txt
+
+Complete flow finished successfully!
+
+All reports saved to: /Users/mengfanlong/Downloads/Projects/Quant/HFT/HFT_System/results
+  - Strategies: ./results/strategies/
+  - Research: ./results/research/
+  - Backtest: ./results/backtest/
+  - Performance: ./results/performance/
+  - HFT Metrics: ./results/hft_metrics/

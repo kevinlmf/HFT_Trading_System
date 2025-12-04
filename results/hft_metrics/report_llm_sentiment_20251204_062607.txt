@@ -1,0 +1,20 @@
+
+================================================================================
+HFT Performance Report: llm_sentiment
+================================================================================
+
+Core Metrics:
+  Hit Ratio:                    49.03% (304/620)
+  Latency Jitter:               1.19 ms
+  Cancel-to-Trade Ratio:        0.09 (55/620)
+  Order Book Imbalance Importance: 0.0000
+  Alpha Decay:                  5.00 ms
+  Slippage:                     0.04 bps
+  Throughput:                   1000.00 TPS
+
+Additional Statistics:
+  Latency Mean:                 0.00 ms (if available)
+  Latency P99:                  0.00 ms (if available)
+  Slippage Mean:                0.00 bps (if available)
+
+================================================================================

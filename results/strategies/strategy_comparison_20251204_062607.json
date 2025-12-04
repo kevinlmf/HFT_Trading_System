@@ -1,0 +1,80 @@
+{
+  "strategies_tested": [
+    "momentum",
+    "mean_reversion",
+    "ml_random_forest",
+    "ml_xgboost",
+    "rl_simple",
+    "llm_sentiment",
+    "llm_pattern"
+  ],
+  "strategy_results": {
+    "momentum": {
+      "total_return": -0.2208169013417759,
+      "error": null
+    },
+    "mean_reversion": {
+      "total_return": -0.032281708176313595,
+      "error": null
+    },
+    "ml_random_forest": {
+      "total_return": 0.31443161718575086,
+      "error": null
+    },
+    "ml_xgboost": {
+      "total_return": 0.48599359497916983,
+      "error": null
+    },
+    "rl_simple": {
+      "total_return": 0.13668835683835634,
+      "error": null
+    },
+    "llm_sentiment": {
+      "total_return": -0.16410160947261165,
+      "error": null
+    },
+    "llm_pattern": {
+      "total_return": -0.22259032799899658,
+      "error": null
+    }
+  },
+  "risk_results": {
+    "momentum": {
+      "volatility": 0.12619706640234324,
+      "sharpe_ratio": -0.5940702109480477,
+      "max_drawdown": 0.3979018961711048
+    },
+    "mean_reversion": {
+      "volatility": 0.08496804406844889,
+      "sharpe_ratio": -0.2903533467696705,
+      "max_drawdown": 0.217952084417746
+    },
+    "ml_random_forest": {
+      "volatility": 0.1408915849064815,
+      "sharpe_ratio": 0.4180332287951698,
+      "max_drawdown": 0.18279409209384337
+    },
+    "ml_xgboost": {
+      "volatility": 0.13427857913515368,
+      "sharpe_ratio": 0.6623615960661775,
+      "max_drawdown": 0.129665317351329
+    },
+    "rl_simple": {
+      "volatility": 0.13208109262651127,
+      "sharpe_ratio": 0.15916852110603474,
+      "max_drawdown": 0.16881435985529922
+    },
+    "llm_sentiment": {
+      "volatility": 0.12381575746623752,
+      "sharpe_ratio": -0.4647939179880152,
+      "max_drawdown": 0.3545780992036581
+    },
+    "llm_pattern": {
+      "volatility": 0.13821516806250564,
+      "sharpe_ratio": -0.5350745015825432,
+      "max_drawdown": 0.35191365160790106
+    }
+  },
+  "best_strategy": "ml_xgboost",
+  "timestamp": "2025-12-04T06:26:07.410043"
+}

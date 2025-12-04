@@ -1,0 +1,20 @@
+
+================================================================================
+HFT Performance Report: llm_pattern
+================================================================================
+
+Core Metrics:
+  Hit Ratio:                    48.50% (373/769)
+  Latency Jitter:               1.16 ms
+  Cancel-to-Trade Ratio:        0.11 (81/770)
+  Order Book Imbalance Importance: 0.0000
+  Alpha Decay:                  3.00 ms
+  Slippage:                     0.02 bps
+  Throughput:                   1000.00 TPS
+
+Additional Statistics:
+  Latency Mean:                 0.00 ms (if available)
+  Latency P99:                  0.00 ms (if available)
+  Slippage Mean:                0.00 bps (if available)
+
+================================================================================
