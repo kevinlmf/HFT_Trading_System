@@ -40,7 +40,7 @@ Monitoring
 
 ## Key Features
 
-### Trading Strategies
+### Trading Strategies and Factor discover
 
 The system includes a comprehensive suite of trading strategies for evaluation and comparison:
 
