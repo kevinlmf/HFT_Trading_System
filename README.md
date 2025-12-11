@@ -187,8 +187,8 @@ HFT_System/
 
 ## Quick Start
 ```bash
-git clone https://github.com/kevinlmf/Options_Pricing
-cd Options_Pricing
+git clone https://github.com/kevinlmf/HFT_Trading_System
+cd HFT_Trading_System
 ```
 ### Basic Usage
 
