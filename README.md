@@ -251,15 +251,11 @@ All results are automatically saved to `results/`:
 
 
 ---
+## Safety, Risk & Licensing Notice
 
-# Safety & Licensing
-
-**For research and education only.** Live deployment demands extensive validation. Trading involves risk; past performance is not indicative of future results.
----
-
-
-
+This project is provided **for research and educational purposes only**. It is **not intended for live trading or commercial deployment** without
+extensive independent validation, stress testing, and risk review. Trading financial instruments involves substantial risk.
+**Past performance is not indicative of future results.* The authors assume no responsibility for any financial losses incurredthrough the use of of this code.
 
 ---
-
 When curiosity meets motion, every millisecond holds the spark🌄
