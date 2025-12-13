@@ -255,8 +255,12 @@ All results are automatically saved to `results/`:
 # Safety & Licensing
 
 **For research and education only.** Live deployment demands extensive validation. Trading involves risk; past performance is not indicative of future results.
+---
+## License
 
-License: MIT
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+
 
 ---
 
